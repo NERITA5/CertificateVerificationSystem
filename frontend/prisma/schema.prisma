@@ -1,0 +1,96 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Certificate {
+  id              String                @id @default(cuid())
+  studentName     String
+  matricule       String                @unique
+  department      String
+  degree          String
+  issueDate       DateTime              @default(now())
+  
+  // Blockchain Proof Data
+  certHash        String                @unique 
+  ipfsHash        String?               @unique @db.Text
+  transactionHash String?  
+  isRevoked       Boolean               @default(false)
+  qrCodeData      String?               @db.Text
+  
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  verificationRequests VerificationRequest[]
+
+  // Relationship: Link back to Student
+  studentId       String?
+  student         Student?              @relation(fields: [studentId], references: [id])
+
+  // Relationship: Link to University
+  universityId    String
+  university      UniversityApplication @relation(fields: [universityId], references: [id])
+
+  @@index([certHash])
+  @@index([matricule])
+  @@index([studentId])
+  @@index([universityId])
+}
+
+model UniversityApplication {
+  id              String        @id @default(cuid())
+  universityName  String
+  accreditationId String
+  location        String?
+  website         String?
+  walletAddress   String        @unique
+  documents       String[] 
+  status          String        @default("PENDING") 
+  transactionHash String?  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relationship: Link to Certificates
+  certificates    Certificate[]
+}
+
+model Student {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        
+  matricule    String        @unique
+  department   String        // New field
+  faculty      String        // New field
+  universityId String        
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relationship: Link to Certificates
+  certificates Certificate[]
+}
+
+model VerificationRequest {
+  id              String      @id @default(uuid())
+  requesterEmail  String?
+  certificateId   String
+  certificate     Certificate @relation(fields: [certificateId], references: [id])
+  status          String      
+  createdAt       DateTime    @default(now())
+}
+
+model InstitutionProfile {
+  id        String @id @default(uuid())
+  name      String
+  email     String
+  address   String
+  website   String
+  // This links the profile to a specific authenticated user/admin account
+  adminId   String @unique 
+}
