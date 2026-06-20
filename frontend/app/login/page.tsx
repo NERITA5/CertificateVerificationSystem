@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // Import Link
+import Link from 'next/link';
 import { verifyUniversityAccess } from "@/app/actions/auth";
 import { Building2, Loader2 } from 'lucide-react';
 
@@ -58,8 +58,12 @@ export default function LoginPage() {
   return (
     <div className="flex h-screen items-center justify-center bg-[#F4F7FE]">
       <div className="bg-white p-10 rounded-3xl shadow-xl border w-96 text-center">
-        <Building2 className="mx-auto mb-4 text-[#0052FF]" size={48} />
-        <h1 className="text-2xl font-bold text-[#1B2559] mb-2">University Login</h1>
+        {/* Brand Header */}
+        <h1 className="text-3xl font-extrabold text-[#0052FF] mb-1">certiVERIFY</h1>
+        
+        <Building2 className="mx-auto my-4 text-[#1B2559]" size={48} />
+        
+        <h2 className="text-xl font-bold text-[#1B2559] mb-2">University Login</h2>
         <p className="text-slate-500 mb-8 text-sm">Connect your wallet to access the secure portal.</p>
         
         <button 
@@ -70,7 +74,6 @@ export default function LoginPage() {
           {loading ? <Loader2 className="animate-spin" /> : "Connect Wallet"}
         </button>
 
-        {/* Registration Link Added Here */}
         <div className="mt-6 text-center text-sm text-slate-500">
           <p>
             Don't have an account?{" "}
