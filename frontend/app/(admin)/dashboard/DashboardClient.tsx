@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import Sidebar from "@/components/Sidebar";
+
 import { RevokeButton } from "@/components/RevokeButton";
 import {
   CheckCircle2,
@@ -41,7 +41,7 @@ export default function DashboardClient({
 
   return (
     <div className="flex min-h-screen bg-[#F4F7FE]">
-      <Sidebar universityName={universityName} />
+      
 
       <main className="flex-1 ml-64 p-8">
         {/* Header Section */}

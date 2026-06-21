@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Sidebar from "@/components/Sidebar";
+
 import { UserPlus, Search, Building2, X } from "lucide-react";
 import { createStudent } from "@/app/actions/create-student";
 
@@ -33,7 +33,7 @@ export default function StudentsClient({ students = [], universityId }: { studen
 
   return (
     <div className="flex min-h-screen bg-[#F4F7FE]">
-      <Sidebar />
+      
       <main className="flex-1 ml-64 p-8">
         <header className="flex justify-between items-center mb-8">
           <h2 className="text-lg font-bold text-[#1B2559]">Students</h2>
