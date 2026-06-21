@@ -3,9 +3,16 @@ import { createUploadthing, type FileRouter } from "uploadthing/next";
 const f = createUploadthing();
 
 export const ourFileRouter = {
-  documentUploader: f({ pdf: { maxFileSize: "4MB", maxFileCount: 5 } })
+  // Define the route for document uploads
+  documentUploader: f({ 
+    pdf: { 
+      maxFileSize: "4MB", 
+      maxFileCount: 5 
+    } 
+  })
     .onUploadComplete(async ({ file }) => {
-      return { url: file.url };
+      // Return the new ufsUrl to avoid the deprecation warning
+      return { url: file.ufsUrl };
     }),
 } satisfies FileRouter;
 
