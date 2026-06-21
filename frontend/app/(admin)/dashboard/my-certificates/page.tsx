@@ -2,7 +2,7 @@ import React from 'react';
 import { downloadCertificatePdf } from "@/app/utils/download";
 import { Download } from "lucide-react";
 import Link from 'next/link';
-import Sidebar from '@/components/Sidebar';
+
 import { ArrowLeft } from 'lucide-react';
 import { getAllCertificates } from "@/app/actions/certificates";
 import CertificatesRegistryView from "@/components/CertificatesRegistryView";
@@ -16,7 +16,6 @@ export default async function MyCertificatesPage() {
 
   return (
     <div className="flex min-h-screen bg-[#F4F7FE]">
-      <Sidebar />
       
       <main className="flex-1 ml-64 p-8">
         {/* Breadcrumbs Section */}

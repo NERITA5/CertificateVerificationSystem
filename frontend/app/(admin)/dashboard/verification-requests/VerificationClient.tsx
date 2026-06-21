@@ -1,11 +1,11 @@
 "use client";
 import { Search, CheckCircle, Clock, AlertCircle } from "lucide-react";
-import Sidebar from "@/components/Sidebar";
+
 
 export default function VerificationClient({ initialRequests }: { initialRequests: any[] }) {
   return (
     <div className="flex min-h-screen bg-[#F4F7FE]">
-      <Sidebar />
+      
       <main className="flex-1 ml-64 p-8">
         <h1 className="text-2xl font-bold text-[#1B2559] mb-6">Verification Requests</h1>
 

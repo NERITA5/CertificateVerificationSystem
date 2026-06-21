@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import Sidebar from "@/components/Sidebar";
+
 
 export default function ProfileClient({ initialData }: { initialData: any }) {
   const [profile, setProfile] = useState({
@@ -39,7 +39,7 @@ export default function ProfileClient({ initialData }: { initialData: any }) {
 
   return (
     <div className="flex min-h-screen bg-[#F4F7FE]">
-      <Sidebar />
+      
       <main className="flex-1 ml-64 p-8">
         <h1 className="text-2xl font-bold text-[#1B2559] mb-8">Institution Profile</h1>
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 max-w-2xl">

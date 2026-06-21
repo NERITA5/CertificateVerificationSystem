@@ -1,11 +1,11 @@
 "use client";
 import { BarChart3, ShieldAlert, FileText, CheckCircle2, History, Download } from "lucide-react";
-import Sidebar from "@/components/Sidebar";
+
 
 export default function ReportsClient({ totalIssued, totalRevoked, onChainCount, deptStats, recentCertificates }: any) {
   return (
     <div className="flex min-h-screen bg-[#F4F7FE]">
-      <Sidebar />
+      
       <main className="flex-1 ml-64 p-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-[#1B2559]">Executive Analytics</h1>

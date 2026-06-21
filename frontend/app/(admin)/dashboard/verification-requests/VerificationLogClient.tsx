@@ -1,11 +1,11 @@
 "use client";
 import { ShieldCheck, Search, AlertTriangle } from "lucide-react";
-import Sidebar from "@/components/Sidebar";
+
 
 export default function VerificationLogClient({ logs }: { logs: any[] }) {
   return (
     <div className="flex min-h-screen bg-[#F4F7FE]">
-      <Sidebar />
+      
       <main className="flex-1 ml-64 p-8">
         <div className="flex justify-between items-center mb-8">
           <div>

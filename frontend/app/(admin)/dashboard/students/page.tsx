@@ -1,6 +1,7 @@
 import { getStudents } from "@/app/actions/students";
-import { verifyUniversityAccess } from "@/app/actions/auth";
 import StudentsClient from "@/components/StudentsClient";
+import { verifyUniversityAccess } from "@/app/actions/auth";
+
 
 export default async function StudentsPage() {
   // 1. Get the current wallet address. 

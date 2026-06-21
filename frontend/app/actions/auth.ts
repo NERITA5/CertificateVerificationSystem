@@ -12,7 +12,7 @@ export type AuthResponse = {
 
 /**
  * Verifies university access based on blockchain wallet address.
- * Uses strict case-insensitive lookup and status-based authorization.
+ * Uses strict unique lookup and status-based authorization.
  */
 export async function verifyUniversityAccess(walletAddress: string): Promise<AuthResponse> {
   // 1. Input Sanitization
@@ -20,16 +20,14 @@ export async function verifyUniversityAccess(walletAddress: string): Promise<Aut
     return { success: false, message: "Invalid or missing wallet address format." };
   }
 
+  // Normalize to lowercase to ensure database consistency
   const normalizedAddress = walletAddress.toLowerCase().trim();
 
   try {
-    // 2. Database Lookup
-    const university = await prisma.universityApplication.findFirst({
+    // 2. Database Lookup (findUnique is safer for @unique fields)
+    const university = await prisma.universityApplication.findUnique({
       where: {
-        walletAddress: {
-          equals: normalizedAddress,
-          mode: 'insensitive',
-        },
+        walletAddress: normalizedAddress,
       },
       select: {
         id: true,

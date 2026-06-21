@@ -3,7 +3,7 @@
 import React, { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
+
 import {
   ArrowLeft,
   Fingerprint,
@@ -352,7 +352,7 @@ export default function IssuePage() {
 
   return (
     <div className="flex min-h-screen bg-[#F4F7FE]">
-      <Sidebar  />
+      
 
       <main className="flex-1 ml-64 p-8">
         <header className="flex justify-between items-center mb-8">
