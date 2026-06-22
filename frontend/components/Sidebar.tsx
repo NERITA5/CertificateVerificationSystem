@@ -10,7 +10,6 @@ import { usePathname } from 'next/navigation';
 import { logout } from "@/app/actions/logout";
 
 interface SidebarProps {
-  // Adding the '?' makes this prop optional, stopping the build errors
   universityName?: string; 
 }
 
@@ -27,7 +26,8 @@ const menuItems = [
   { icon: HelpCircle, label: 'Help & Support', href: '/dashboard/help' },
 ];
 
-export default function Sidebar({ universityName = "University Portal" }: SidebarProps) {
+// CHANGED: Using a named export 'export function' instead of 'export default'
+export function Sidebar({ universityName = "University Portal" }: SidebarProps) {
   const pathname = usePathname();
 
   const handleLogout = async () => {
@@ -35,19 +35,19 @@ export default function Sidebar({ universityName = "University Portal" }: Sideba
   };
 
   return (
-    <aside className="w-64 bg-[#001A41] text-white/70 flex flex-col min-h-screen fixed left-0 top-0 z-50">
-      <div className="p-6">
+    <aside className="w-64 bg-[#001A41] text-white/70 flex flex-col h-full z-50">
+      <div className="p-6 flex flex-col h-full">
         <div className="mb-10 flex flex-col items-center text-center">
           <div className="w-12 h-12 mb-3 bg-[#0052FF] rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <Building2 size={28} className="text-white" />
           </div>
-          {/* Now uses the prop or falls back to "University Portal" */}
           <h1 className="font-bold text-sm leading-tight text-white uppercase break-words px-2">
             {universityName}
           </h1>
           <p className="text-[10px] text-white/50 tracking-widest mt-1 uppercase">Certificate Portal</p>
         </div>
-        <nav className="space-y-1">
+        
+        <nav className="space-y-1 flex-grow">
           {menuItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -64,15 +64,16 @@ export default function Sidebar({ universityName = "University Portal" }: Sideba
             );
           })}
         </nav>
-      </div>
-      <div className="mt-auto p-6 border-t border-white/10">
-        <button 
-          onClick={handleLogout} 
-          className="flex items-center gap-3 px-4 py-2 text-[13px] font-medium hover:text-white transition-colors w-full group"
-        >
-          <LogOut size={18} />
-          Logout
-        </button>
+
+        <div className="mt-auto pt-6 border-t border-white/10">
+          <button 
+            onClick={handleLogout} 
+            className="flex items-center gap-3 px-4 py-2 text-[13px] font-medium hover:text-white transition-colors w-full group"
+          >
+            <LogOut size={18} />
+            Logout
+          </button>
+        </div>
       </div>
     </aside>
   );

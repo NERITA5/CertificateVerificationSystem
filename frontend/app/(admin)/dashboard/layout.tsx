@@ -1,11 +1,15 @@
 // app/(admin)/dashboard/layout.tsx
-import Sidebar from '@/components/Sidebar';
+import { Sidebar } from '@/components/Sidebar'; // MUST USE { Sidebar }
 import { cookies } from 'next/headers';
 import { prisma as db } from '@/lib/prisma';
+import { cache } from 'react';
 
-// Force the layout to re-run on every request
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+const getUniversityName = cache(async (wallet: string) => {
+  return await db.universityApplication.findFirst({
+    where: { walletAddress: { equals: wallet, mode: 'insensitive' } },
+    select: { universityName: true }
+  });
+});
 
 export default async function AdminLayout({ 
   children 
@@ -15,18 +19,13 @@ export default async function AdminLayout({
   const cookieStore = await cookies();
   const wallet = cookieStore.get('wallet_address')?.value;
   
-  // Initialize with fallback
   let universityName = "University Portal";
 
   if (wallet) {
     try {
-      const record = await db.universityApplication.findFirst({
-        where: { walletAddress: { equals: wallet, mode: 'insensitive' } },
-        select: { universityName: true }
-      });
-      
+      const record = await getUniversityName(wallet);
       if (record?.universityName) {
-        universityName = String(record.universityName);
+        universityName = record.universityName;
       }
     } catch (error) {
       console.error("Layout fetch error:", error);
@@ -34,15 +33,11 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex">
-      {/* The 'key' prop forces a complete unmount/remount of the Sidebar 
-        whenever universityName changes. This prevents stale state.
-      */}
-      <Sidebar 
-        key={universityName} 
-        universityName={universityName} 
-      /> 
-      <main className="flex-1 ml-64 p-8">
+    <div className="flex h-screen overflow-hidden">
+      <div className="w-64 flex-shrink-0">
+        <Sidebar universityName={universityName} /> 
+      </div>
+      <main className="flex-1 overflow-y-auto p-8">
         {children}
       </main>
     </div>
