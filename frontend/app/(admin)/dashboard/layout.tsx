@@ -33,18 +33,17 @@ export default async function AdminLayout({
   }
 
   return (
-    // 'h-screen' sets height to 100vh. 'w-screen' ensures it stays within viewport.
-    // 'overflow-hidden' on the parent stops ANY scrollbars from appearing here.
     <div className="flex h-screen w-screen overflow-hidden">
       <div className="w-64 flex-shrink-0">
         <Sidebar universityName={universityName} /> 
       </div>
       
-      {/* 'flex-1' makes it fill available space.
-        'overflow-y-auto' allows internal vertical scrolling.
-        'min-w-0' is the trick: it prevents flex-child from growing wider than its content.
+      {/* 'pl-6' creates a smaller, tighter space next to the sidebar.
+        'pr-8' keeps breathing room on the right.
+        'py-8' maintains vertical spacing.
+        'min-w-0' ensures the flex container doesn't overflow.
       */}
-      <main className="flex-1 overflow-y-auto p-8 min-w-0">
+      <main className="flex-1 overflow-y-auto pl-6 pr-8 py-8 min-w-0">
         {children}
       </main>
     </div>
