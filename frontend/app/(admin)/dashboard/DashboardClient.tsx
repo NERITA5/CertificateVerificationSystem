@@ -2,7 +2,6 @@
 
 import React from "react";
 import Link from "next/link";
-
 import { RevokeButton } from "@/components/RevokeButton";
 import {
   CheckCircle2,
@@ -40,10 +39,10 @@ export default function DashboardClient({
   }
 
   return (
-    <div className="flex min-h-screen bg-[#F4F7FE]">
-      
-
-      <main className="flex-1 ml-64 p-8">
+    // Removed min-h-screen as the layout handles height
+    <div className="bg-[#F4F7FE] w-full"> 
+      {/* Removed ml-64. The layout.tsx manages the sidebar positioning. */}
+      <main className="w-full">
         {/* Header Section */}
         <header className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">

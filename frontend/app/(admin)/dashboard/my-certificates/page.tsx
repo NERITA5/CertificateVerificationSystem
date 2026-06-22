@@ -1,8 +1,6 @@
 import React from 'react';
-import { downloadCertificatePdf } from "@/app/utils/download";
 import { Download } from "lucide-react";
 import Link from 'next/link';
-
 import { ArrowLeft } from 'lucide-react';
 import { getAllCertificates } from "@/app/actions/certificates";
 import CertificatesRegistryView from "@/components/CertificatesRegistryView";
@@ -15,9 +13,13 @@ export default async function MyCertificatesPage() {
   const certificates = await getAllCertificates();
 
   return (
-    <div className="flex min-h-screen bg-[#F4F7FE]">
+    // REMOVED: flex min-h-screen (Layout wrapper should handle full height)
+    <div className="w-full">
       
-      <main className="flex-1 ml-64 p-8">
+      {/* REMOVED: ml-64 (The layout parent already provides this space) 
+          REMOVED: flex-1 (No longer needed on the main tag directly)
+      */}
+      <main className="p-8">
         {/* Breadcrumbs Section */}
         <div className="mb-6 flex items-center gap-2 text-sm">
           <Link href="/dashboard" className="text-slate-400 hover:text-[#0052FF] flex items-center gap-1 transition-colors font-medium">

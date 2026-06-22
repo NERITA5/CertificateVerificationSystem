@@ -33,18 +33,19 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      <div className="w-64 flex-shrink-0">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#F8FAFC]">
+      <div className="w-64 flex-shrink-0 border-r border-slate-200">
         <Sidebar universityName={universityName} /> 
       </div>
       
-      {/* 'pl-6' creates a smaller, tighter space next to the sidebar.
-        'pr-8' keeps breathing room on the right.
-        'py-8' maintains vertical spacing.
-        'min-w-0' ensures the flex container doesn't overflow.
+      {/* 1. 'pl-0' removes the gap between sidebar and main content.
+        2. 'pr-6' and 'py-6' maintain spacing on the right and top.
       */}
-      <main className="flex-1 overflow-y-auto pl-6 pr-8 py-8 min-w-0">
-        {children}
+      <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-0">
+        {/* Removed 'mx-auto' so content starts from the left edge */}
+        <div className="w-full">
+          {children}
+        </div>
       </main>
     </div>
   );

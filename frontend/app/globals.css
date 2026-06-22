@@ -20,26 +20,26 @@
 }
 
 @layer base {
+  /* 1. Complete reset for layout integrity */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden; /* Prevents horizontal scrollbar */
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
-    
-    /* 1. Force sharp text rendering */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-    
-    /* 2. Prevent sub-pixel blur on elements */
-    image-rendering: -webkit-optimize-contrast;
-    
-    /* 3. Ensure font-sans is prioritized */
     font-family: var(--font-sans);
   }
 
-  /* 4. Global fix: Force GPU to snap to integer pixels */
+  /* 2. Remove problematic global transforms */
+  /* These can cause sub-pixel offsets that look like gaps */
   * {
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    transform: translateZ(0);
+    box-sizing: border-box;
   }
 }

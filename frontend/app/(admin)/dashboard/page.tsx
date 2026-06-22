@@ -1,3 +1,4 @@
+// app/(admin)/dashboard/page.tsx
 import { protectDashboard } from "@/lib/auth-guard";
 import { getDashboardStats } from "@/app/actions/dashboard";
 import DashboardClient from "./DashboardClient";
@@ -7,30 +8,30 @@ export default async function DashboardPage() {
   // 1. Authenticate
   const session = await protectDashboard();
 
-  // If the session is null, the guard has determined the user is unauthorized
   if (!session) {
     redirect("/login");
   }
 
   try {
     // 2. Fetch stats 
-    // We assume getDashboardStats() is secure and uses the same session/cookie logic
     const stats = await getDashboardStats();
 
-    // 3. Render the client component with verified data
+    // 3. Render the client component.
+    // Ensure DashboardClient does not have 'mx-auto' or fixed widths 
+    // that force it to the center of the page.
     return (
-      <DashboardClient 
-        stats={stats} 
-        universityName={session.user} 
-      />
+      <div className="w-full">
+        <DashboardClient 
+          stats={stats} 
+          universityName={session.user} 
+        />
+      </div>
     );
     
   } catch (error: any) {
-    // Ensure Next.js internal redirects (like those from getDashboardStats) aren't caught
     if (error?.digest?.startsWith('NEXT_REDIRECT')) throw error;
     
     console.error("Dashboard Page Error:", error);
-    // On unexpected errors, force redirect to login
     redirect("/login");
   }
 }

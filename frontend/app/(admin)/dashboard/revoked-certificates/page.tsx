@@ -1,6 +1,5 @@
 import CertificatesRegistryView from "@/components/CertificatesRegistryView";
 import { ShieldAlert } from "lucide-react";
-
 import { prisma } from "@/lib/prisma"; 
 
 export default async function RevokedCertificatesPage() {
@@ -18,9 +17,13 @@ export default async function RevokedCertificatesPage() {
     }));
 
   return (
-    <div className="flex min-h-screen bg-[#F4F7FE]">
+    // REMOVED: flex min-h-screen (Layout wrapper handles full height)
+    <div className="w-full">
       
-      <main className="flex-1 ml-64 p-8">
+      {/* REMOVED: ml-64 (Layout parent provides this space) 
+          REMOVED: flex-1 (No longer needed on the main tag)
+      */}
+      <main className="p-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-[#1B2559] flex items-center gap-2">
             <ShieldAlert className="text-rose-500" size={28} />
