@@ -34,19 +34,26 @@ export default async function AdminLayout({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#F8FAFC]">
-      {/* DESKTOP SIDEBAR: Hidden on mobile, forced to 256px, flex-shrink-0 prevents shrinking */}
-      <div className="hidden md:flex w-64 flex-shrink-0 border-r border-slate-200 h-full">
+      {/* DESKTOP SIDEBAR:
+        - hidden (mobile): hidden by default
+        - md:flex: shows as flex on medium screens and up
+        - w-64: explicit width
+        - flex-shrink-0: prevents the sidebar from being crushed
+        - bg-white: ensures it's visible against the page background
+      */}
+      <aside className="hidden md:flex w-64 flex-shrink-0 border-r border-slate-200 h-full bg-white z-10">
         <Sidebar universityName={universityName} /> 
-      </div>
+      </aside>
       
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 h-full overflow-y-auto">
+      <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* MOBILE NAV: Only renders on screens smaller than 'md' */}
-        <div className="md:hidden w-full">
+        <header className="md:hidden w-full flex-shrink-0">
           <MobileNavWrapper universityName={universityName} />
-        </div>
+        </header>
         
-        <div className="w-full p-4 md:p-8">
+        {/* SCROLLABLE CONTENT */}
+        <div className="flex-1 overflow-y-auto w-full p-4 md:p-8">
           {children}
         </div>
       </main>
