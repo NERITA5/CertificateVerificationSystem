@@ -26,7 +26,6 @@ const menuItems = [
   { icon: HelpCircle, label: 'Help & Support', href: '/dashboard/help' },
 ];
 
-// CHANGED: Using a named export 'export function' instead of 'export default'
 export function Sidebar({ universityName = "University Portal" }: SidebarProps) {
   const pathname = usePathname();
 
@@ -35,8 +34,9 @@ export function Sidebar({ universityName = "University Portal" }: SidebarProps) 
   };
 
   return (
-    <aside className="w-64 bg-[#001A41] text-white/70 flex flex-col h-full z-50">
-      <div className="p-6 flex flex-col h-full">
+    // ADDED: flex-shrink-0 ensures the sidebar keeps its width 256px regardless of screen size
+    <aside className="w-64 bg-[#001A41] text-white/70 flex flex-col h-screen flex-shrink-0">
+      <div className="p-6 flex flex-col h-full overflow-y-auto">
         <div className="mb-10 flex flex-col items-center text-center">
           <div className="w-12 h-12 mb-3 bg-[#0052FF] rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <Building2 size={28} className="text-white" />

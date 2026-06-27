@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { prisma } from "@/lib/prisma";
 
@@ -11,11 +11,13 @@ export type AuthResponse = {
 
 /**
  * Verifies university access based on blockchain wallet address.
- * Uses findFirst with insensitive mode to handle case-mismatches.
  */
 export async function verifyUniversityAccess(walletAddress: string): Promise<AuthResponse> {
+  console.log("[AUTH] Starting verification for:", walletAddress);
+
   // 1. Input Sanitization
   if (!walletAddress || typeof walletAddress !== 'string' || !walletAddress.startsWith('0x')) {
+    console.warn("[AUTH] Invalid input format.");
     return { success: false, message: "Invalid or missing wallet address format." };
   }
 
@@ -23,7 +25,8 @@ export async function verifyUniversityAccess(walletAddress: string): Promise<Aut
 
   try {
     // 2. Database Lookup
-    // Using findFirst with mode: 'insensitive' to ignore casing differences between DB and input
+    console.log("[AUTH] Querying database for:", normalizedAddress);
+    
     const university = await prisma.universityApplication.findFirst({
       where: {
         walletAddress: {
@@ -38,10 +41,12 @@ export async function verifyUniversityAccess(walletAddress: string): Promise<Aut
       }
     });
 
+    console.log("[AUTH] Query completed. Result found:", !!university);
+
     // 3. Security Decision
     if (!university) {
       console.warn(`[AUTH] Unauthorized: ${normalizedAddress} not found in DB.`);
-      return { success: false, message: "Access Denied: Wallet not registered as an institution." };
+      return { success: false, message: "Access Denied: Wallet not registered." };
     }
 
     // 4. Status Validation
@@ -51,6 +56,7 @@ export async function verifyUniversityAccess(walletAddress: string): Promise<Aut
     }
     
     // 5. Authorized Success
+    console.log("[AUTH] Success for:", university.universityName);
     return { 
       success: true, 
       id: university.id, 
@@ -58,7 +64,7 @@ export async function verifyUniversityAccess(walletAddress: string): Promise<Aut
     };
 
   } catch (error) {
-    console.error("[AUTH] Database Error:", error);
-    return { success: false, message: "An internal security error occurred." };
+    console.error("[AUTH] Database Error details:", error);
+    return { success: false, message: "Connection to database failed. Please check your network." };
   }
 }

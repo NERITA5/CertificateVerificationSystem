@@ -1,5 +1,5 @@
-// app/(admin)/dashboard/layout.tsx
 import { Sidebar } from '@/components/Sidebar';
+import { MobileNavWrapper } from '@/components/MobileNavWrapper';
 import { cookies } from 'next/headers';
 import { prisma as db } from '@/lib/prisma';
 import { cache } from 'react';
@@ -33,17 +33,20 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#F8FAFC]">
-      <div className="w-64 flex-shrink-0 border-r border-slate-200">
+    <div className="flex h-screen w-full overflow-hidden bg-[#F8FAFC]">
+      {/* DESKTOP SIDEBAR: Hidden on mobile, forced to 256px, flex-shrink-0 prevents shrinking */}
+      <div className="hidden md:flex w-64 flex-shrink-0 border-r border-slate-200 h-full">
         <Sidebar universityName={universityName} /> 
       </div>
       
-      {/* 1. 'pl-0' removes the gap between sidebar and main content.
-        2. 'pr-6' and 'py-6' maintain spacing on the right and top.
-      */}
-      <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-0">
-        {/* Removed 'mx-auto' so content starts from the left edge */}
-        <div className="w-full">
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 h-full overflow-y-auto">
+        {/* MOBILE NAV: Only renders on screens smaller than 'md' */}
+        <div className="md:hidden w-full">
+          <MobileNavWrapper universityName={universityName} />
+        </div>
+        
+        <div className="w-full p-4 md:p-8">
           {children}
         </div>
       </main>
