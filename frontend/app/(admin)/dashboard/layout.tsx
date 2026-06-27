@@ -33,17 +33,22 @@ export default async function AdminLayout({
   }
 
   return (
-    // Removed overflow-hidden to let the browser handle layout flow naturally
-    <div className="flex h-screen w-full bg-[#F8FAFC]">
+    // We use grid for desktop (md:) to force the sidebar to exist.
+    // h-screen ensures it takes the full viewport height.
+    <div className="h-screen w-full bg-[#F8FAFC] flex flex-col md:grid md:grid-cols-[256px,1fr]">
       
-      {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex w-64 flex-shrink-0 border-r border-slate-200 bg-white z-20">
+      {/* DESKTOP SIDEBAR:
+          - hidden: hidden on mobile
+          - md:block: shown as a block on desktop
+          - h-full: fills the vertical grid track
+      */}
+      <aside className="hidden md:block h-full border-r border-slate-200 bg-white z-10">
         <Sidebar universityName={universityName} /> 
       </aside>
       
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col h-full min-w-0">
-        {/* MOBILE NAV */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden">
+        {/* MOBILE NAV: Only renders on screens smaller than 'md' */}
         <header className="md:hidden w-full flex-shrink-0">
           <MobileNavWrapper universityName={universityName} />
         </header>
