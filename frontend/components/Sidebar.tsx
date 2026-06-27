@@ -34,8 +34,8 @@ export function Sidebar({ universityName = "University Portal" }: SidebarProps) 
   };
 
   return (
-    // Changed h-screen to h-full to inherit height from the Layout container
-    <aside className="w-64 bg-[#001A41] text-white/70 flex flex-col h-full flex-shrink-0">
+    // Ensured h-full and w-full so it fills the parent aside container completely
+    <div className="h-full w-full bg-[#001A41] text-white/70 flex flex-col">
       <div className="p-6 flex flex-col flex-grow overflow-y-auto">
         <div className="mb-10 flex flex-col items-center text-center">
           <div className="w-12 h-12 mb-3 bg-[#0052FF] rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
@@ -75,6 +75,6 @@ export function Sidebar({ universityName = "University Portal" }: SidebarProps) 
           </button>
         </div>
       </div>
-    </aside>
+    </div>
   );
 }
