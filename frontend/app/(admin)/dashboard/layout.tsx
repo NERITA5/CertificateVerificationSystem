@@ -33,22 +33,23 @@ export default async function AdminLayout({
   }
 
   return (
-    // We force a flex layout here to override any global grid conflicts
-    <div className="h-screen w-full flex overflow-hidden bg-[#F8FAFC]">
+    // 'flex' container with 'h-screen' ensures the app fills the viewport.
+    <div className="flex h-screen w-full bg-[#F8FAFC]">
       
-      {/* SIDEBAR:
-        We use 'flex-shrink-0' to keep its size, 
-        and 'hidden md:flex' to show only on desktop.
+      {/* DESKTOP SIDEBAR:
+          - hidden: hidden on mobile
+          - md:flex: shown as a flex container on desktop
+          - flex-shrink-0: ensures the sidebar width stays fixed
       */}
-      <aside className="hidden md:flex w-64 h-full flex-shrink-0 border-r border-slate-200 bg-white">
+      <aside className="hidden md:flex w-64 h-full flex-shrink-0 bg-[#001A41]">
         <Sidebar universityName={universityName} /> 
       </aside>
       
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         
-        {/* MOBILE NAV: visible only on small screens */}
-        <header className="md:hidden w-full flex-shrink-0">
+        {/* MOBILE NAV: Visible only on small screens */}
+        <header className="md:hidden w-full flex-shrink-0 bg-white border-b border-slate-200">
           <MobileNavWrapper universityName={universityName} />
         </header>
         
