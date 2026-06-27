@@ -1,18 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import "tailwindcss";
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,25 +16,20 @@
 }
 
 @layer base {
-  /* 1. Complete reset for layout integrity */
   html, body {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
-    overflow-x: hidden; /* Prevents horizontal scrollbar */
+    overflow-x: hidden;
   }
 
   body {
     background-color: var(--background);
     color: var(--foreground);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     font-family: var(--font-sans);
   }
 
-  /* 2. Remove problematic global transforms */
-  /* These can cause sub-pixel offsets that look like gaps */
   * {
     box-sizing: border-box;
   }

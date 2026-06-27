@@ -36,13 +36,12 @@ export default async function AdminLayout({
     // 'flex' container with 'h-screen' ensures the app fills the viewport.
     <div className="flex h-screen w-full bg-[#F8FAFC]">
       
-      {/* DESKTOP SIDEBAR:
-          - hidden: hidden on mobile
-          - md:flex: shown as a flex container on desktop
-          - flex-shrink-0: ensures the sidebar width stays fixed
-      */}
+      {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex w-64 h-full flex-shrink-0 bg-[#001A41]">
-        <Sidebar universityName={universityName} /> 
+        {/* We ensure Sidebar has full height and width to fill the aside */}
+        <div className="w-full h-full">
+           <Sidebar universityName={universityName} /> 
+        </div>
       </aside>
       
       {/* MAIN CONTENT AREA */}
