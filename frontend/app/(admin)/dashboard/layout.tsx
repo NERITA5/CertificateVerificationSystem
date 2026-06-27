@@ -33,26 +33,26 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="h-screen w-full bg-[#F8FAFC] flex flex-col md:grid md:grid-cols-[256px,1fr]">
+    // We force a flex layout here to override any global grid conflicts
+    <div className="h-screen w-full flex overflow-hidden bg-[#F8FAFC]">
       
-      {/* DIAGNOSTIC SIDEBAR: 
-          - Added 'border-4 border-red-500' and 'bg-red-100' to force visibility.
-          - If you see a red box, the layout is working.
-          - If you see no red box on PC, the 'md:' breakpoint is not triggering.
+      {/* SIDEBAR:
+        We use 'flex-shrink-0' to keep its size, 
+        and 'hidden md:flex' to show only on desktop.
       */}
-      <aside className="hidden md:block h-full border-r-4 border-red-500 bg-red-100 z-50">
-        <div className="text-[10px] text-red-600 font-bold p-1 uppercase">Sidebar Debug</div>
+      <aside className="hidden md:flex w-64 h-full flex-shrink-0 border-r border-slate-200 bg-white">
         <Sidebar universityName={universityName} /> 
       </aside>
       
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* MOBILE NAV */}
+        
+        {/* MOBILE NAV: visible only on small screens */}
         <header className="md:hidden w-full flex-shrink-0">
           <MobileNavWrapper universityName={universityName} />
         </header>
         
-        {/* SCROLLABLE CONTENT */}
+        {/* SCROLLABLE CONTENT AREA */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
           {children}
         </div>
