@@ -33,12 +33,13 @@ export default async function AdminLayout({
   }
 
   return (
-    // 'flex' container with 'h-screen' ensures the app fills the viewport.
     <div className="flex h-screen w-full bg-[#F8FAFC]">
       
-      {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex w-64 h-full flex-shrink-0 bg-[#001A41]">
-        {/* We ensure Sidebar has full height and width to fill the aside */}
+      {/* DESKTOP SIDEBAR - inline style forces it visible regardless of Tailwind */}
+      <aside
+        style={{ display: 'flex', width: '256px', height: '100%', flexShrink: 0, backgroundColor: '#001A41' }}
+        className="hidden md:flex w-64 h-full flex-shrink-0 bg-[#001A41]"
+      >
         <div className="w-full h-full">
            <Sidebar universityName={universityName} /> 
         </div>
