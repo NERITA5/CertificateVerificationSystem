@@ -16,18 +16,14 @@ export default async function ReportsPage() {
   }, {});
 
   return (
-    // We use a wrapper div to provide consistent padding, 
-    // replacing the redundant layout logic inside the page.
     <div className="w-full">
-      <main className="p-8">
-        <ReportsClient 
-          totalIssued={totalIssued}
-          totalRevoked={totalRevoked}
-          onChainCount={onChainCount}
-          deptStats={deptStats}
-          recentCertificates={allCertificates.slice(0, 5)}
-        />
-      </main>
+      <ReportsClient
+        totalIssued={totalIssued}
+        totalRevoked={totalRevoked}
+        onChainCount={onChainCount}
+        deptStats={deptStats}
+        recentCertificates={allCertificates.slice(0, 5)}
+      />
     </div>
   );
 }
