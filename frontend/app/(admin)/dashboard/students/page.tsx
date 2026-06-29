@@ -1,23 +1,28 @@
 import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
 import StudentsClient from "@/components/StudentsClient";
 
 export default async function StudentsPage() {
-  // Fetch students directly from the database
+  const cookieStore = await cookies();
+  const wallet = cookieStore.get("wallet_address")?.value;
+
+  let universityId = "";
+
+  if (wallet) {
+    const university = await prisma.universityApplication.findFirst({
+      where: { walletAddress: { equals: wallet, mode: "insensitive" } },
+      select: { id: true },
+    });
+    universityId = university?.id || "";
+  }
+
   const students = await prisma.student.findMany({
-    orderBy: { createdAt: 'desc' },
+    orderBy: { createdAt: "desc" },
   });
 
   return (
-    // 'w-full' ensures the container occupies the full available width.
-    // Ensure your parent 'layout.tsx' uses 'flex' and sets the sidebar width,
-    // and the page content div is set to 'flex-1'.
     <div className="w-full">
-      <main className="w-full p-8">
-        <StudentsClient 
-          students={students} 
-          universityId={students[0]?.universityId || "N/A"} 
-        />
-      </main>
+      <StudentsClient students={students} universityId={universityId} />
     </div>
   );
 }

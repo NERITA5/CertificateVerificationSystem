@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   ArrowLeft,
@@ -20,6 +20,7 @@ import {
 
 import { uploadToIPFS } from "@/app/actions/ipfs";
 import { issueCert } from "@/lib/contract";
+import { createStudent } from "@/app/actions/create-student";
 
 import QRCode from "qrcode";
 import jsPDF from "jspdf";
@@ -27,6 +28,7 @@ import html2canvas from "html2canvas-pro";
 
 export default function IssuePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const certificateRef = useRef<HTMLDivElement>(null);
 
   const [isMinting, setIsMinting] = useState(false);
@@ -39,16 +41,34 @@ export default function IssuePage() {
   const [registrarSig, setRegistrarSig] = useState<string | null>(null);
   const [vcSig, setVcSig] = useState<string | null>(null);
 
+  // Read prefill values from URL params (set when coming from Students page)
+  const prefillName = searchParams.get("name") || "";
+  const prefillMatricule = searchParams.get("matricule") || "";
+  const prefillFaculty = searchParams.get("faculty") || "";
+  const prefillDepartment = searchParams.get("department") || "";
+  const isPreFilled = !!prefillName || !!prefillMatricule;
+
   const [formData, setFormData] = useState({
-    studentName: "",
-    matricule: "",
-    faculty: "",
+    studentName: prefillName,
+    matricule: prefillMatricule,
+    faculty: prefillFaculty,
     degree: "",
-    department: "",
+    department: prefillDepartment,
     university: "University of Buea",
     dateOfBirth: "",
     dateOfIssue: new Date().toISOString().split("T")[0],
   });
+
+  // Sync form if URL params change
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      studentName: prefillName || prev.studentName,
+      matricule: prefillMatricule || prev.matricule,
+      faculty: prefillFaculty || prev.faculty,
+      department: prefillDepartment || prev.department,
+    }));
+  }, [prefillName, prefillMatricule, prefillFaculty, prefillDepartment]);
 
   const handleImageUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -57,11 +77,8 @@ export default function IssuePage() {
     const file = e.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
-      if (type === "registrar") {
-        setRegistrarSig(url);
-      } else {
-        setVcSig(url);
-      }
+      if (type === "registrar") setRegistrarSig(url);
+      else setVcSig(url);
     }
   };
 
@@ -147,6 +164,20 @@ export default function IssuePage() {
       console.log("DB Certificate ID:", certificateId);
       console.log("Certificate Hash:", certHash);
 
+      // PHASE 3b — AUTO-SAVE STUDENT (silent, skips duplicate check)
+      try {
+        const studentData = new FormData();
+        studentData.append("name", formData.studentName);
+        studentData.append("matricule", formData.matricule);
+        studentData.append("faculty", formData.faculty);
+        studentData.append("department", formData.department);
+        studentData.append("email", "");
+        studentData.append("skipDuplicateCheck", "true");
+        await createStudent(studentData);
+      } catch {
+        // Silent fail — student may already exist, that's fine
+      }
+
       // PHASE 4 — BLOCKCHAIN MINTING
       setStatus({ type: "success", msg: "Opening MetaMask for blockchain confirmation..." });
       const receipt = await issueCert(
@@ -190,7 +221,7 @@ export default function IssuePage() {
         );
       }
 
-      // PHASE 8 — SUCCESS
+      // PHASE 8 — SUCCESS & DOWNLOAD
       setStatus({ type: "success", msg: "Certificate Issued Successfully!" });
       const downloadUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -225,9 +256,16 @@ export default function IssuePage() {
           >
             <ArrowLeft size={20} />
           </Link>
-          <h2 className="text-base md:text-lg font-bold text-[#1B2559]">
-            Issue Official Degree
-          </h2>
+          <div>
+            <h2 className="text-base md:text-lg font-bold text-[#1B2559]">
+              Issue Official Degree
+            </h2>
+            {isPreFilled && (
+              <p className="text-[11px] text-[#0052FF] font-medium mt-0.5">
+                Pre-filled from student record: {prefillName}
+              </p>
+            )}
+          </div>
         </header>
 
         <div className="max-w-5xl mx-auto pb-10">
@@ -504,7 +542,8 @@ export default function IssuePage() {
                 className="text-sm italic max-w-3xl mx-auto leading-relaxed"
                 style={{ color: "#64748b" }}
               >
-                In testimony whereof, the seal of the university and the signature of its officers are here unto affixed.
+                In testimony whereof, the seal of the university and the
+                signature of its officers are here unto affixed.
               </p>
               <p
                 className="text-md font-sans italic underline underline-offset-4 tracking-wider"
