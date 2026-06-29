@@ -35,8 +35,8 @@ export default async function AdminLayout({
   return (
     <div className="flex h-screen w-full bg-[#F8FAFC]">
       
-      {/* DESKTOP SIDEBAR: hidden on mobile, flex on md+ */}
-      <aside className="hidden md:flex w-64 h-full flex-shrink-0 bg-[#001A41]">
+      {/* DESKTOP SIDEBAR */}
+      <aside className="desktop-sidebar">
         <div className="w-full h-full">
           <Sidebar universityName={universityName} />
         </div>
@@ -45,8 +45,8 @@ export default async function AdminLayout({
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         
-        {/* MOBILE NAV: hamburger, hidden on md+ */}
-        <header className="md:hidden w-full flex-shrink-0 bg-white border-b border-slate-200">
+        {/* MOBILE NAV */}
+        <header className="mobile-header flex-shrink-0 bg-white border-b border-slate-200">
           <MobileNavWrapper universityName={universityName} />
         </header>
         

@@ -43,3 +43,29 @@
     box-sizing: border-box;
   }
 }
+
+/* Sidebar responsive - bypasses Tailwind purging issues */
+.desktop-sidebar {
+  display: none;
+  width: 256px;
+  height: 100%;
+  flex-shrink: 0;
+  background-color: #001A41;
+}
+
+@media (min-width: 768px) {
+  .desktop-sidebar {
+    display: flex !important;
+  }
+}
+
+.mobile-header {
+  display: flex;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .mobile-header {
+    display: none !important;
+  }
+}
