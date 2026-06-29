@@ -91,7 +91,7 @@ export default function IssuePage() {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
       const canvas = await html2canvas(certificateRef.current, {
-        scale: 3, // Higher scale = sharper QR code
+        scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
@@ -192,12 +192,12 @@ export default function IssuePage() {
       setStatus({ type: "success", msg: "Generating blockchain verification QR code..." });
       const trueVerifyUrl = `${window.location.origin}/verify?hash=${certHash}`;
       const finalQrData = await QRCode.toDataURL(trueVerifyUrl, {
-        width: 400,        // Large source size for crisp rendering
+        width: 400,
         margin: 2,
-        errorCorrectionLevel: "H", // Highest error correction = clearest QR
+        errorCorrectionLevel: "H",
         color: {
-          dark: "#000000",  // Pure black modules
-          light: "#ffffff", // Pure white background
+          dark: "#000000",
+          light: "#ffffff",
         },
       });
       setQrCodeUrl(finalQrData);
@@ -246,7 +246,6 @@ export default function IssuePage() {
     }
   };
 
-  // Dynamic font size based on name length
   const nameFontSize =
     formData.studentName.length > 25
       ? "2.4rem"
@@ -308,9 +307,7 @@ export default function IssuePage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    Student Name
-                  </label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Student Name</label>
                   <input
                     name="studentName"
                     value={formData.studentName}
@@ -321,9 +318,7 @@ export default function IssuePage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    Matricule
-                  </label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Matricule</label>
                   <input
                     name="matricule"
                     value={formData.matricule}
@@ -337,9 +332,7 @@ export default function IssuePage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    University
-                  </label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">University</label>
                   <input
                     name="university"
                     value={formData.university}
@@ -349,9 +342,7 @@ export default function IssuePage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    Faculty
-                  </label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Faculty</label>
                   <input
                     name="faculty"
                     value={formData.faculty}
@@ -365,9 +356,7 @@ export default function IssuePage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    Degree
-                  </label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Degree</label>
                   <input
                     name="degree"
                     value={formData.degree}
@@ -378,9 +367,7 @@ export default function IssuePage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    Department
-                  </label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Department</label>
                   <input
                     name="department"
                     value={formData.department}
@@ -394,9 +381,7 @@ export default function IssuePage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    Date of Birth
-                  </label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Date of Birth</label>
                   <input
                     name="dateOfBirth"
                     value={formData.dateOfBirth}
@@ -406,9 +391,7 @@ export default function IssuePage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    Date of Issue
-                  </label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Date of Issue</label>
                   <input
                     name="dateOfIssue"
                     value={formData.dateOfIssue}
@@ -426,25 +409,20 @@ export default function IssuePage() {
                   ) : (
                     <Upload size={20} className="mx-auto text-slate-300" />
                   )}
-                  <p className="text-[9px] mt-2 font-bold uppercase text-slate-400">
-                    Registrar Signature
-                  </p>
+                  <p className="text-[9px] mt-2 font-bold uppercase text-slate-400">Registrar Signature</p>
                   <input
                     type="file"
                     onChange={(e) => handleImageUpload(e, "registrar")}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                   />
                 </div>
-
                 <div className="flex-1 text-center border-2 border-dashed border-slate-200 p-4 rounded-xl relative hover:border-[#0052FF] transition-colors">
                   {vcSig ? (
                     <img src={vcSig} className="h-12 mx-auto" alt="VC Signature" />
                   ) : (
                     <Upload size={20} className="mx-auto text-slate-300" />
                   )}
-                  <p className="text-[9px] mt-2 font-bold uppercase text-slate-400">
-                    VC Signature
-                  </p>
+                  <p className="text-[9px] mt-2 font-bold uppercase text-slate-400">VC Signature</p>
                   <input
                     type="file"
                     onChange={(e) => handleImageUpload(e, "vc")}
@@ -495,7 +473,6 @@ export default function IssuePage() {
               boxSizing: "border-box",
             }}
           >
-            {/* Inner border decoration */}
             <div
               style={{
                 position: "absolute",
@@ -508,39 +485,13 @@ export default function IssuePage() {
 
             {/* SECTION 1 — University Header */}
             <div style={{ textAlign: "center", width: "100%" }}>
-              <h1
-                style={{
-                  fontSize: "2.6rem",
-                  fontWeight: 900,
-                  textTransform: "uppercase",
-                  color: "#001A41",
-                  margin: 0,
-                  letterSpacing: "0.05em",
-                }}
-              >
+              <h1 style={{ fontSize: "2.6rem", fontWeight: 900, textTransform: "uppercase", color: "#001A41", margin: 0, letterSpacing: "0.05em" }}>
                 {formData.university}
               </h1>
-              <p
-                style={{
-                  fontSize: "0.65rem",
-                  letterSpacing: "0.4em",
-                  fontStyle: "italic",
-                  color: "#64748b",
-                  fontFamily: "sans-serif",
-                  margin: "4px 0 0 0",
-                }}
-              >
+              <p style={{ fontSize: "0.65rem", letterSpacing: "0.4em", fontStyle: "italic", color: "#64748b", fontFamily: "sans-serif", margin: "4px 0 0 0" }}>
                 OFFICIAL ACADEMIC RECORD
               </p>
-              <p
-                style={{
-                  fontSize: "1.1rem",
-                  fontStyle: "italic",
-                  color: "#475569",
-                  fontFamily: "sans-serif",
-                  margin: "6px 0 0 0",
-                }}
-              >
+              <p style={{ fontSize: "1.1rem", fontStyle: "italic", color: "#475569", fontFamily: "sans-serif", margin: "6px 0 0 0" }}>
                 This is to certify that
               </p>
             </div>
@@ -562,17 +513,7 @@ export default function IssuePage() {
               >
                 {formData.studentName || "STUDENT NAME"}
               </h2>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: "24px",
-                  fontSize: "0.95rem",
-                  fontFamily: "sans-serif",
-                  color: "#475569",
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "24px", fontSize: "0.95rem", fontFamily: "sans-serif", color: "#475569" }}>
                 <p style={{ margin: 0 }}>
                   born on{" "}
                   <span style={{ fontWeight: 700, color: "#001A41", textDecoration: "underline" }}>
@@ -590,17 +531,7 @@ export default function IssuePage() {
             </div>
 
             {/* SECTION 3 — Body Text */}
-            <div
-              style={{
-                fontSize: "0.95rem",
-                lineHeight: 1.85,
-                textAlign: "center",
-                maxWidth: "900px",
-                fontFamily: "sans-serif",
-                color: "#1e293b",
-                padding: "0 20px",
-              }}
-            >
+            <div style={{ fontSize: "0.95rem", lineHeight: 1.85, textAlign: "center", maxWidth: "900px", fontFamily: "sans-serif", color: "#1e293b", padding: "0 20px" }}>
               fulfilled all the requirements of the{" "}
               <span style={{ fontWeight: 700, textTransform: "uppercase", textDecoration: "underline" }}>
                 {formData.university}
@@ -630,16 +561,7 @@ export default function IssuePage() {
             </div>
 
             {/* SECTION 4 — Signatures + QR */}
-            <div
-              style={{
-                width: "100%",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-end",
-                padding: "0 60px",
-              }}
-            >
-              {/* Registrar */}
+            <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "0 60px" }}>
               <div style={{ textAlign: "center", width: "180px", borderTop: "2px solid #001A41", paddingTop: "10px" }}>
                 {registrarSig && (
                   <img src={registrarSig} style={{ height: "48px", margin: "0 auto 4px" }} alt="Registrar" />
@@ -649,7 +571,6 @@ export default function IssuePage() {
                 </p>
               </div>
 
-              {/* QR Code — high quality */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 {qrCodeUrl ? (
                   <img
@@ -658,26 +579,13 @@ export default function IssuePage() {
                     style={{
                       width: "110px",
                       height: "110px",
-                      imageRendering: "pixelated", // Keeps QR crisp, no blurring
+                      imageRendering: "pixelated",
                       border: "3px solid #ffffff",
                       boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
                     }}
                   />
                 ) : (
-                  <div
-                    style={{
-                      width: "110px",
-                      height: "110px",
-                      border: "2px solid #e2e8f0",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "9px",
-                      color: "#94a3b8",
-                      textAlign: "center",
-                      padding: "8px",
-                    }}
-                  >
+                  <div style={{ width: "110px", height: "110px", border: "2px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#94a3b8", textAlign: "center", padding: "8px" }}>
                     QR generates after blockchain
                   </div>
                 )}
@@ -686,7 +594,6 @@ export default function IssuePage() {
                 </p>
               </div>
 
-              {/* Vice Chancellor */}
               <div style={{ textAlign: "center", width: "180px", borderTop: "2px solid #001A41", paddingTop: "10px" }}>
                 {vcSig && (
                   <img src={vcSig} style={{ height: "48px", margin: "0 auto 4px" }} alt="Vice Chancellor" />
