@@ -35,25 +35,22 @@ export default async function AdminLayout({
   return (
     <div className="flex h-screen w-full bg-[#F8FAFC]">
       
-      {/* DESKTOP SIDEBAR - inline style forces it visible regardless of Tailwind */}
-      <aside
-        style={{ display: 'flex', width: '256px', height: '100%', flexShrink: 0, backgroundColor: '#001A41' }}
-        className="hidden md:flex w-64 h-full flex-shrink-0 bg-[#001A41]"
-      >
+      {/* DESKTOP SIDEBAR: hidden on mobile, flex on md+ */}
+      <aside className="hidden md:flex w-64 h-full flex-shrink-0 bg-[#001A41]">
         <div className="w-full h-full">
-           <Sidebar universityName={universityName} /> 
+          <Sidebar universityName={universityName} />
         </div>
       </aside>
       
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         
-        {/* MOBILE NAV: Visible only on small screens */}
+        {/* MOBILE NAV: hamburger, hidden on md+ */}
         <header className="md:hidden w-full flex-shrink-0 bg-white border-b border-slate-200">
           <MobileNavWrapper universityName={universityName} />
         </header>
         
-        {/* SCROLLABLE CONTENT AREA */}
+        {/* SCROLLABLE CONTENT */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
           {children}
         </div>
