@@ -41,7 +41,6 @@ export default function IssuePage() {
   const [registrarSig, setRegistrarSig] = useState<string | null>(null);
   const [vcSig, setVcSig] = useState<string | null>(null);
 
-  // Read prefill values from URL params (set when coming from Students page)
   const prefillName = searchParams.get("name") || "";
   const prefillMatricule = searchParams.get("matricule") || "";
   const prefillFaculty = searchParams.get("faculty") || "";
@@ -59,7 +58,6 @@ export default function IssuePage() {
     dateOfIssue: new Date().toISOString().split("T")[0],
   });
 
-  // Sync form if URL params change
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
@@ -93,7 +91,7 @@ export default function IssuePage() {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
       const canvas = await html2canvas(certificateRef.current, {
-        scale: 2,
+        scale: 3, // Higher scale = sharper QR code
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
@@ -175,7 +173,7 @@ export default function IssuePage() {
         studentData.append("skipDuplicateCheck", "true");
         await createStudent(studentData);
       } catch {
-        // Silent fail — student may already exist, that's fine
+        // Silent fail — student may already exist
       }
 
       // PHASE 4 — BLOCKCHAIN MINTING
@@ -190,16 +188,20 @@ export default function IssuePage() {
       console.log("Blockchain Receipt:", receipt);
       if (!receipt || !receipt.hash) throw new Error("Blockchain transaction failed.");
 
-      // PHASE 5 — GENERATE FINAL QR
+      // PHASE 5 — GENERATE FINAL QR (high quality)
       setStatus({ type: "success", msg: "Generating blockchain verification QR code..." });
       const trueVerifyUrl = `${window.location.origin}/verify?hash=${certHash}`;
       const finalQrData = await QRCode.toDataURL(trueVerifyUrl, {
-        width: 250,
-        margin: 1,
-        errorCorrectionLevel: "M",
+        width: 400,        // Large source size for crisp rendering
+        margin: 2,
+        errorCorrectionLevel: "H", // Highest error correction = clearest QR
+        color: {
+          dark: "#000000",  // Pure black modules
+          light: "#ffffff", // Pure white background
+        },
       });
       setQrCodeUrl(finalQrData);
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
       // PHASE 6 — FINAL PDF WITH QR
       setStatus({ type: "success", msg: "Generating final certificate..." });
@@ -243,6 +245,14 @@ export default function IssuePage() {
       setIsMinting(false);
     }
   };
+
+  // Dynamic font size based on name length
+  const nameFontSize =
+    formData.studentName.length > 25
+      ? "2.4rem"
+      : formData.studentName.length > 18
+      ? "3rem"
+      : "3.75rem";
 
   return (
     <div className="w-full bg-[#F4F7FE]">
@@ -468,130 +478,225 @@ export default function IssuePage() {
         <div className="absolute top-[-9999px] left-[-9999px]">
           <div
             ref={certificateRef}
-            style={{ backgroundColor: "#ffffff", color: "#001A41" }}
-            className="w-[1120px] h-[792px] p-20 border-[20px] border-[#001A41] relative flex flex-col items-center justify-between font-serif"
+            style={{
+              backgroundColor: "#ffffff",
+              color: "#001A41",
+              width: "1120px",
+              height: "792px",
+              padding: "40px 56px",
+              border: "20px solid #001A41",
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontFamily: "Georgia, serif",
+              overflow: "hidden",
+              boxSizing: "border-box",
+            }}
           >
+            {/* Inner border decoration */}
             <div
-              className="absolute inset-4 border-2"
-              style={{ borderColor: "#001A41", opacity: 0.1 }}
+              style={{
+                position: "absolute",
+                inset: "12px",
+                border: "2px solid #001A41",
+                opacity: 0.08,
+                pointerEvents: "none",
+              }}
             />
 
-            <div className="text-center">
-              <h1 className="text-5xl font-black uppercase" style={{ color: "#001A41" }}>
+            {/* SECTION 1 — University Header */}
+            <div style={{ textAlign: "center", width: "100%" }}>
+              <h1
+                style={{
+                  fontSize: "2.6rem",
+                  fontWeight: 900,
+                  textTransform: "uppercase",
+                  color: "#001A41",
+                  margin: 0,
+                  letterSpacing: "0.05em",
+                }}
+              >
                 {formData.university}
               </h1>
-              <p className="text-sm tracking-[0.4em] font-sans italic" style={{ color: "#64748b" }}>
+              <p
+                style={{
+                  fontSize: "0.65rem",
+                  letterSpacing: "0.4em",
+                  fontStyle: "italic",
+                  color: "#64748b",
+                  fontFamily: "sans-serif",
+                  margin: "4px 0 0 0",
+                }}
+              >
                 OFFICIAL ACADEMIC RECORD
+              </p>
+              <p
+                style={{
+                  fontSize: "1.1rem",
+                  fontStyle: "italic",
+                  color: "#475569",
+                  fontFamily: "sans-serif",
+                  margin: "6px 0 0 0",
+                }}
+              >
+                This is to certify that
               </p>
             </div>
 
-            <div className="text-center space-y-6 px-10">
-              <p className="text-2xl italic font-sans" style={{ color: "#475569" }}>
-                This is to certify that
-              </p>
+            {/* SECTION 2 — Student Name + Birth/Matricule */}
+            <div style={{ textAlign: "center", width: "100%", padding: "0 40px" }}>
               <h2
-                className="text-6xl font-bold border-b-4 pb-2 inline-block px-10"
-                style={{ borderBottomColor: "#001A41" }}
+                style={{
+                  fontSize: nameFontSize,
+                  fontWeight: 700,
+                  borderBottom: "3px solid #001A41",
+                  paddingBottom: "6px",
+                  display: "inline-block",
+                  paddingLeft: "32px",
+                  paddingRight: "32px",
+                  lineHeight: 1.2,
+                  margin: "0 0 12px 0",
+                }}
               >
                 {formData.studentName || "STUDENT NAME"}
               </h2>
-              <div className="flex justify-center items-center gap-8 text-lg font-sans text-slate-600">
-                <p>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "24px",
+                  fontSize: "0.95rem",
+                  fontFamily: "sans-serif",
+                  color: "#475569",
+                }}
+              >
+                <p style={{ margin: 0 }}>
                   born on{" "}
-                  <span className="font-bold text-[#001A41] underline">
+                  <span style={{ fontWeight: 700, color: "#001A41", textDecoration: "underline" }}>
                     {formData.dateOfBirth || ".........."}
                   </span>
                 </p>
-                <div className="w-1.5 h-1.5 bg-slate-300 rounded-full"></div>
-                <p>
+                <div style={{ width: "5px", height: "5px", backgroundColor: "#cbd5e1", borderRadius: "50%" }} />
+                <p style={{ margin: 0 }}>
                   Matricule No:{" "}
-                  <span className="font-mono font-bold text-[#001A41] underline">
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#001A41", textDecoration: "underline" }}>
                     {formData.matricule || ".........."}
                   </span>
                 </p>
               </div>
-              <div
-                className="text-xl leading-[2.2] text-center max-w-4xl mx-auto font-sans"
-                style={{ color: "#1e293b" }}
-              >
-                fulfilled all the requirements of the{" "}
-                <span className="font-bold uppercase underline decoration-1">
-                  {formData.university}
-                </span>{" "}
-                and satisfactorily completed the prescribed courses in the{" "}
-                <span className="font-bold underline decoration-1">
-                  {formData.faculty || "..................."}
-                </span>
-                {formData.department && (
-                  <>
-                    {" "}in the Department of{" "}
-                    <span className="font-bold underline decoration-1">
-                      {formData.department}
-                    </span>
-                  </>
-                )}{" "}
-                has under the authority of Senate, been admitted to the{" "}
-                <span
-                  className="font-bold text-2xl underline decoration-1"
-                  style={{ color: "#0052FF" }}
-                >
-                  {formData.degree || "..................."}
-                </span>.
-              </div>
-              <p
-                className="text-sm italic max-w-3xl mx-auto leading-relaxed"
-                style={{ color: "#64748b" }}
-              >
-                In testimony whereof, the seal of the university and the
-                signature of its officers are here unto affixed.
+            </div>
+
+            {/* SECTION 3 — Body Text */}
+            <div
+              style={{
+                fontSize: "0.95rem",
+                lineHeight: 1.85,
+                textAlign: "center",
+                maxWidth: "900px",
+                fontFamily: "sans-serif",
+                color: "#1e293b",
+                padding: "0 20px",
+              }}
+            >
+              fulfilled all the requirements of the{" "}
+              <span style={{ fontWeight: 700, textTransform: "uppercase", textDecoration: "underline" }}>
+                {formData.university}
+              </span>{" "}
+              and satisfactorily completed the prescribed courses in the{" "}
+              <span style={{ fontWeight: 700, textDecoration: "underline" }}>
+                {formData.faculty || "..................."}
+              </span>
+              {formData.department && (
+                <>
+                  {" "}in the Department of{" "}
+                  <span style={{ fontWeight: 700, textDecoration: "underline" }}>
+                    {formData.department}
+                  </span>
+                </>
+              )}{" "}
+              has under the authority of Senate, been admitted to the{" "}
+              <span style={{ fontWeight: 700, fontSize: "1.1rem", textDecoration: "underline", color: "#0052FF" }}>
+                {formData.degree || "..................."}
+              </span>.
+              <p style={{ fontSize: "0.75rem", fontStyle: "italic", color: "#64748b", margin: "8px 0 2px 0" }}>
+                In testimony whereof, the seal of the university and the signature of its officers are here unto affixed.
               </p>
-              <p
-                className="text-md font-sans italic underline underline-offset-4 tracking-wider"
-                style={{ color: "#64748b" }}
-              >
+              <p style={{ fontSize: "0.8rem", fontStyle: "italic", textDecoration: "underline", color: "#64748b", margin: 0 }}>
                 Given this day: {formData.dateOfIssue}
               </p>
             </div>
 
-            <div className="w-full flex justify-between items-end px-16 pb-6">
-              <div className="text-center w-56 border-t-2 pt-4" style={{ borderTopColor: "#001A41" }}>
+            {/* SECTION 4 — Signatures + QR */}
+            <div
+              style={{
+                width: "100%",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                padding: "0 60px",
+              }}
+            >
+              {/* Registrar */}
+              <div style={{ textAlign: "center", width: "180px", borderTop: "2px solid #001A41", paddingTop: "10px" }}>
                 {registrarSig && (
-                  <img src={registrarSig} className="h-16 mx-auto mb-1" alt="Registrar" />
+                  <img src={registrarSig} style={{ height: "48px", margin: "0 auto 4px" }} alt="Registrar" />
                 )}
-                <p className="text-xs font-bold uppercase" style={{ color: "#001A41" }}>
+                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", color: "#001A41", margin: 0 }}>
                   Registrar
                 </p>
               </div>
 
-              <div className="flex flex-col items-center">
+              {/* QR Code — high quality */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 {qrCodeUrl ? (
                   <img
                     src={qrCodeUrl}
-                    className="w-28 h-28 border-4 border-white shadow-lg"
                     alt="Verification QR Code"
+                    style={{
+                      width: "110px",
+                      height: "110px",
+                      imageRendering: "pixelated", // Keeps QR crisp, no blurring
+                      border: "3px solid #ffffff",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                    }}
                   />
                 ) : (
                   <div
-                    className="w-28 h-28 bg-white border flex items-center justify-center text-[10px]"
-                    style={{ color: "#94a3b8" }}
+                    style={{
+                      width: "110px",
+                      height: "110px",
+                      border: "2px solid #e2e8f0",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "9px",
+                      color: "#94a3b8",
+                      textAlign: "center",
+                      padding: "8px",
+                    }}
                   >
-                    Loading Verification Anchor...
+                    QR generates after blockchain
                   </div>
                 )}
-                <p className="text-[10px] mt-2 font-bold" style={{ color: "#0052FF" }}>
+                <p style={{ fontSize: "0.55rem", fontWeight: 700, color: "#0052FF", margin: "4px 0 0 0" }}>
                   SECURED BY ETHEREUM
                 </p>
               </div>
 
-              <div className="text-center w-56 border-t-2 pt-4" style={{ borderTopColor: "#001A41" }}>
+              {/* Vice Chancellor */}
+              <div style={{ textAlign: "center", width: "180px", borderTop: "2px solid #001A41", paddingTop: "10px" }}>
                 {vcSig && (
-                  <img src={vcSig} className="h-16 mx-auto mb-1" alt="Vice Chancellor" />
+                  <img src={vcSig} style={{ height: "48px", margin: "0 auto 4px" }} alt="Vice Chancellor" />
                 )}
-                <p className="text-xs font-bold uppercase" style={{ color: "#001A41" }}>
+                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", color: "#001A41", margin: 0 }}>
                   Vice Chancellor
                 </p>
               </div>
             </div>
+
           </div>
         </div>
 
