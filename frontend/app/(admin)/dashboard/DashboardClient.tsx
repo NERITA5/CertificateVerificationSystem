@@ -11,7 +11,6 @@ import {
   BarChart3,
   HelpCircle,
   Bell,
-  Menu,
   FileText,
   Building2,
   ShieldX,
@@ -39,16 +38,11 @@ export default function DashboardClient({
   }
 
   return (
-    // Removed min-h-screen as the layout handles height
     <div className="bg-[#F4F7FE] w-full"> 
-      {/* Removed ml-64. The layout.tsx manages the sidebar positioning. */}
       <main className="w-full">
         {/* Header Section */}
         <header className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <Menu className="text-slate-600 lg:hidden" />
-            <h2 className="text-lg font-bold text-[#1B2559]">Dashboard</h2>
-          </div>
+          <h2 className="text-lg font-bold text-[#1B2559]">Dashboard</h2>
 
           <div className="flex items-center gap-4">
             <div className="relative p-2 text-slate-400">
@@ -69,15 +63,19 @@ export default function DashboardClient({
         </header>
 
         {/* Welcome Section */}
-        <div className="mb-8 flex justify-between items-center">
+        <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-[#1B2559]">Welcome back, Administrator!</h1>
-            <p className="text-slate-500 text-sm">Monitoring your decentralized certificate verification system.</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#1B2559]">
+              Welcome back, Administrator!
+            </h1>
+            <p className="text-slate-500 text-sm">
+              Monitoring your decentralized certificate verification system.
+            </p>
           </div>
 
           <Link
             href="/dashboard/issue"
-            className="bg-[#0052FF] hover:bg-[#0041CC] text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold"
+            className="bg-[#0052FF] hover:bg-[#0041CC] text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold whitespace-nowrap self-start sm:self-auto transition-colors"
           >
             <Plus size={18} /> Issue New Certificate
           </Link>
@@ -96,7 +94,9 @@ export default function DashboardClient({
               </div>
               <p className="text-[11px] font-bold text-slate-400 uppercase">{s.label}</p>
               <h3 className="text-3xl font-bold text-[#1B2559]">{s.val?.toLocaleString() || 0}</h3>
-              <Link href="/dashboard/my-certificates" className="text-xs text-[#0052FF] font-bold mt-2">View all →</Link>
+              <Link href="/dashboard/my-certificates" className="text-xs text-[#0052FF] font-bold mt-2">
+                View all →
+              </Link>
             </div>
           ))}
         </div>
@@ -138,7 +138,11 @@ export default function DashboardClient({
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={4} className="py-10 text-center text-slate-400 italic">No certificates issued yet.</td></tr>
+                      <tr>
+                        <td colSpan={4} className="py-10 text-center text-slate-400 italic">
+                          No certificates issued yet.
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 </table>
@@ -146,7 +150,7 @@ export default function DashboardClient({
             </div>
           </div>
 
-          {/* Quick Actions Sidebar */}
+          {/* Quick Actions */}
           <div className="space-y-8">
             <div className="bg-white p-6 rounded-2xl border">
               <h3 className="font-bold mb-6">Quick Actions</h3>
@@ -156,9 +160,15 @@ export default function DashboardClient({
                   { t: "Revoke Certificate", i: AlertCircle, link: "/dashboard/my-certificates" },
                   { t: "Generate Report", i: BarChart3, link: "/dashboard/reports" },
                 ].map((a, i) => (
-                  <Link key={i} href={a.link} className="flex items-center gap-4 p-3.5 border rounded-xl hover:bg-slate-50 transition-colors">
+                  <Link
+                    key={i}
+                    href={a.link}
+                    className="flex items-center gap-4 p-3.5 border rounded-xl hover:bg-blue-50 hover:border-[#0052FF] transition-all group"
+                  >
                     <a.i size={20} className="text-[#0052FF]" />
-                    <p className="font-bold text-[#1B2559]">{a.t}</p>
+                    <p className="font-bold text-[#1B2559] group-hover:text-[#0052FF] transition-colors">
+                      {a.t}
+                    </p>
                   </Link>
                 ))}
               </div>
@@ -166,8 +176,10 @@ export default function DashboardClient({
 
             <div className="bg-white p-8 rounded-2xl border text-center">
               <h3 className="font-bold mb-3 text-sm">Need Help?</h3>
-              <p className="text-[11px] text-slate-500 mb-6">Check documentation or contact support.</p>
-              <button className="w-full py-3 border border-[#0052FF] rounded-xl text-xs font-bold text-[#0052FF] flex items-center justify-center gap-2">
+              <p className="text-[11px] text-slate-500 mb-6">
+                Check documentation or contact support.
+              </p>
+              <button className="w-full py-3 border border-[#0052FF] rounded-xl text-xs font-bold text-[#0052FF] flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
                 <HelpCircle size={16} /> Visit Help Center
               </button>
             </div>
