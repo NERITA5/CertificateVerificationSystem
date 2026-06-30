@@ -86,12 +86,37 @@ export default function IssuePage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Waits for all <img> tags inside the certificate node to actually finish
+  // decoding (signatures + QR code), instead of guessing with a fixed delay.
+  // Falls back gracefully if there are no images or they're already loaded.
+  const waitForImagesReady = async (container: HTMLElement) => {
+    const imgs = Array.from(container.querySelectorAll("img"));
+    await Promise.all(
+      imgs.map((img) => {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          // Safety net in case neither fires for some reason
+          setTimeout(() => resolve(), 1200);
+        });
+      })
+    );
+    if (typeof document !== "undefined" && (document as any).fonts?.ready) {
+      try {
+        await (document as any).fonts.ready;
+      } catch {
+        // ignore font readiness errors, not critical
+      }
+    }
+  };
+
   const generatePDFBlob = async () => {
     if (!certificateRef.current) return null;
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await waitForImagesReady(certificateRef.current);
     try {
       const canvas = await html2canvas(certificateRef.current, {
-        scale: 3,
+        scale: 2, // print-quality at A4, faster than 3 with no visible loss
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
@@ -130,7 +155,7 @@ export default function IssuePage() {
       let pdfBlob = await generatePDFBlob();
       if (!pdfBlob) throw new Error("Failed to generate certificate PDF.");
 
-      // PHASE 2 — UPLOAD PDF TO IPFS
+      // PHASE 2 — UPLOAD PDF TO IPFS (in parallel with silent student save)
       setStatus({ type: "success", msg: "Uploading certificate to IPFS..." });
       const ipfsFormData = new FormData();
       ipfsFormData.append(
@@ -138,7 +163,22 @@ export default function IssuePage() {
         pdfBlob,
         `${formData.studentName}_Certificate.pdf`
       );
-      const ipfsResult = await uploadToIPFS(ipfsFormData);
+
+      const studentData = new FormData();
+      studentData.append("name", formData.studentName);
+      studentData.append("matricule", formData.matricule);
+      studentData.append("faculty", formData.faculty);
+      studentData.append("department", formData.department);
+      studentData.append("email", "");
+      studentData.append("skipDuplicateCheck", "true");
+
+      const [ipfsResult] = await Promise.all([
+        uploadToIPFS(ipfsFormData),
+        createStudent(studentData).catch(() => {
+          // Silent fail — student may already exist
+        }),
+      ]);
+
       if (!ipfsResult.success || !ipfsResult.ipfsHash) {
         throw new Error(ipfsResult.error || "Failed to upload certificate to IPFS.");
       }
@@ -161,20 +201,6 @@ export default function IssuePage() {
 
       console.log("DB Certificate ID:", certificateId);
       console.log("Certificate Hash:", certHash);
-
-      // PHASE 3b — AUTO-SAVE STUDENT (silent, skips duplicate check)
-      try {
-        const studentData = new FormData();
-        studentData.append("name", formData.studentName);
-        studentData.append("matricule", formData.matricule);
-        studentData.append("faculty", formData.faculty);
-        studentData.append("department", formData.department);
-        studentData.append("email", "");
-        studentData.append("skipDuplicateCheck", "true");
-        await createStudent(studentData);
-      } catch {
-        // Silent fail — student may already exist
-      }
 
       // PHASE 4 — BLOCKCHAIN MINTING
       setStatus({ type: "success", msg: "Opening MetaMask for blockchain confirmation..." });
@@ -201,7 +227,11 @@ export default function IssuePage() {
         },
       });
       setQrCodeUrl(finalQrData);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Let React commit the QR <img> into the DOM before we snapshot it.
+      // generatePDFBlob's waitForImagesReady() will then confirm it has
+      // actually decoded before html2canvas runs.
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
 
       // PHASE 6 — FINAL PDF WITH QR
       setStatus({ type: "success", msg: "Generating final certificate..." });
