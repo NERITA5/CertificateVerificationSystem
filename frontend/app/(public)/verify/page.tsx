@@ -20,7 +20,15 @@ import {
   Phone,
   MapPin,
   Info,
+  Camera,
 } from "lucide-react";
+
+// Detect mobile once at module level
+const isMobile = () =>
+  typeof window !== "undefined" &&
+  /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(
+    navigator.userAgent
+  );
 
 function VerifyContent() {
   const searchParams = useSearchParams();
@@ -36,12 +44,18 @@ function VerifyContent() {
   const [copied, setCopied] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [mobile, setMobile] = useState(false);
 
   const qrRegionId = "html5qr-reader";
   const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isScanningRef = useRef(false);   // tracks real-time scanning state
-  const hasNavigatedRef = useRef(false); // prevents double-navigation on fast scan
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const isScanningRef = useRef(false);
+  const hasNavigatedRef = useRef(false);
+
+  useEffect(() => {
+    setMobile(isMobile());
+  }, []);
 
   // AUTO VERIFY
   useEffect(() => {
@@ -56,25 +70,21 @@ function VerifyContent() {
         await html5QrcodeRef.current.stop();
         isScanningRef.current = false;
       }
-    } catch (_) {
-      // ignore stop errors
-    }
+    } catch (_) {}
   }, []);
 
-  // START SCANNER
+  // START DESKTOP SCANNER ONLY
   useEffect(() => {
-    if (certHash || result || loading) return;
+    if (mobile || certHash || result || loading) return;
 
     hasNavigatedRef.current = false;
     let mounted = true;
 
     const startScanner = async () => {
-      // Small delay so the DOM element is painted before Html5Qrcode mounts
       await new Promise((r) => setTimeout(r, 300));
       if (!mounted) return;
 
       try {
-        // Always create a fresh instance — reusing a stopped instance is unreliable
         if (html5QrcodeRef.current) {
           try { await html5QrcodeRef.current.stop(); } catch (_) {}
         }
@@ -97,25 +107,18 @@ function VerifyContent() {
           await handleDecodedUrl(decodedText);
         };
 
-        // Try rear camera via facingMode first (works on most Android)
         try {
           await html5QrcodeRef.current.start(
             { facingMode: { exact: "environment" } },
-            config,
-            onSuccess,
-            () => {}
+            config, onSuccess, () => {}
           );
         } catch (_) {
-          // facingMode exact failed — try ideal (works on iOS Safari)
           try {
             await html5QrcodeRef.current.start(
               { facingMode: "environment" },
-              config,
-              onSuccess,
-              () => {}
+              config, onSuccess, () => {}
             );
           } catch (__) {
-            // Both facingMode approaches failed — enumerate and pick back camera
             const devices = await Html5Qrcode.getCameras();
             if (!devices || devices.length === 0) {
               setScannerError("No camera detected on this device.");
@@ -124,15 +127,10 @@ function VerifyContent() {
               return;
             }
             const backCamera =
-              devices.find((d) =>
-                /back|rear|environment/i.test(d.label)
-              ) || devices[devices.length - 1];
-
+              devices.find((d) => /back|rear|environment/i.test(d.label)) ||
+              devices[devices.length - 1];
             await html5QrcodeRef.current.start(
-              backCamera.id,
-              config,
-              onSuccess,
-              () => {}
+              backCamera.id, config, onSuccess, () => {}
             );
           }
         }
@@ -141,8 +139,6 @@ function VerifyContent() {
         isScanningRef.current = false;
         setIsScanning(false);
         if (!mounted) return;
-
-        // Give a helpful message depending on the error type
         if (
           err?.message?.toLowerCase().includes("permission") ||
           err?.message?.toLowerCase().includes("denied") ||
@@ -151,11 +147,6 @@ function VerifyContent() {
           setScannerError(
             "Camera permission denied. Please allow camera access in your browser settings, then refresh."
           );
-        } else if (
-          err?.name === "NotFoundError" ||
-          err?.message?.toLowerCase().includes("not found")
-        ) {
-          setScannerError("No camera found on this device.");
         } else {
           setScannerError(
             "Camera unavailable. Use 'Upload QR Image' below to verify instead."
@@ -170,12 +161,11 @@ function VerifyContent() {
       mounted = false;
       stopScanner();
     };
-  }, [certHash, result, loading]);
+  }, [mobile, certHash, result, loading]);
 
   const handleDecodedUrl = async (text: string) => {
     await stopScanner();
     setIsScanning(false);
-
     try {
       let hash = text.trim();
       if (text.includes("?hash=")) {
@@ -185,7 +175,6 @@ function VerifyContent() {
       router.push(`/verify?hash=${encodeURIComponent(hash)}`);
     } catch (err) {
       console.error("URL parse error:", err);
-      // If it's not a URL at all, treat the whole text as the hash
       router.push(`/verify?hash=${encodeURIComponent(text.trim())}`);
     }
   };
@@ -201,24 +190,44 @@ function VerifyContent() {
     router.push("/verify");
   };
 
+  // Mobile: user taps "Scan with Camera" → native camera opens → photo taken → scanned
+  const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const scanner = new Html5Qrcode("hidden-file-reader", { verbose: false });
+      const decodedText = await scanner.scanFile(file, true);
+      await scanner.clear();
+      await handleDecodedUrl(decodedText);
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+      setError(
+        "Could not detect a QR code. Make sure the QR code is clear and well-lit, then try again."
+      );
+    } finally {
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  // Desktop: upload existing image
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setLoading(true);
     setError(null);
-
     try {
-      // Use a separate hidden div — never reuse the live scanner div
       const scanner = new Html5Qrcode("hidden-file-reader", { verbose: false });
       const decodedText = await scanner.scanFile(file, true);
+      await scanner.clear();
       await handleDecodedUrl(decodedText);
     } catch (err) {
       console.error(err);
       setLoading(false);
       setError("Could not detect a QR code in the uploaded image.");
     } finally {
-      // Reset input so same file can be re-uploaded
       if (e.target) e.target.value = "";
     }
   };
@@ -233,7 +242,6 @@ function VerifyContent() {
     let dbCertData = null;
 
     try {
-      // STEP 1 — DB lookup
       try {
         const lookupResponse = await fetch(
           `/api/certificates/lookup?hash=${hashToVerify}`
@@ -249,7 +257,6 @@ function VerifyContent() {
         console.warn("DB lookup failed:", dbErr);
       }
 
-      // STEP 2 — Quick revoke check from DB
       if (dbCertData?.isRevoked) {
         setIsRevoked(true);
         setResult({
@@ -264,15 +271,14 @@ function VerifyContent() {
         return;
       }
 
-      // STEP 3 — Blockchain verification using IPFS hash (what the contract stored)
       const blockchainKey = dbCertData?.ipfsHash || hashToVerify;
       let data: any = null;
 
       try {
         data = await verifyCert(blockchainKey);
       } catch (bcErr) {
-        console.warn("Blockchain call failed:", bcErr);
-        if (dbCertData && dbCertData.transactionHash) {
+        console.warn("Blockchain call failed, falling back to DB:", bcErr);
+        if (dbCertData) {
           data = {
             isValid: true,
             isRevoked: false,
@@ -281,16 +287,11 @@ function VerifyContent() {
             university: dbCertData.university,
             timestamp: dbCertData.timestamp || Math.floor(Date.now() / 1000),
           };
-        } else if (dbCertData && !dbCertData.transactionHash) {
-          throw new Error(
-            "This certificate is still being processed on the blockchain. Please try again in a moment."
-          );
         } else {
           throw bcErr;
         }
       }
 
-      // STEP 4 — Handle result
       if (data?.isRevoked) {
         setIsRevoked(true);
         setResult({
@@ -311,7 +312,7 @@ function VerifyContent() {
           department: dbCertData?.department || data.department || null,
           transactionHash: dbCertData?.transactionHash || data.transactionHash || null,
         });
-      } else if (dbCertData && dbCertData.transactionHash) {
+      } else if (dbCertData) {
         setResult({
           isValid: true,
           studentName: dbCertData.studentName,
@@ -319,7 +320,7 @@ function VerifyContent() {
           university: dbCertData.university || "University of Buea",
           matricule: dbCertData.matricule || null,
           department: dbCertData.department || null,
-          transactionHash: dbCertData.transactionHash,
+          transactionHash: dbCertData.transactionHash || null,
         });
       } else {
         setError("Certificate not found or invalid.");
@@ -340,17 +341,26 @@ function VerifyContent() {
 
   return (
     <div className="min-h-screen bg-[#07111F] text-white scroll-smooth">
-      {/* Hidden div for file-based QR scanning — must never be display:none */}
       <div
         id="hidden-file-reader"
         style={{ position: "absolute", top: "-9999px", left: "-9999px", width: "1px", height: "1px" }}
       />
 
+      {/* Mobile: native camera capture */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleCameraCapture}
+      />
+
+      {/* Desktop: file upload */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={handleFileUpload}
       />
@@ -363,9 +373,7 @@ function VerifyContent() {
               <ShieldCheck size={18} className="md:w-[22px] md:h-[22px]" />
             </div>
             <div>
-              <h1 className="font-black text-base md:text-xl tracking-wide text-white">
-                certiVERIFY
-              </h1>
+              <h1 className="font-black text-base md:text-xl tracking-wide text-white">certiVERIFY</h1>
               <p className="text-[9px] md:text-[11px] text-slate-400 font-medium hidden sm:block">
                 Blockchain Verification
               </p>
@@ -410,53 +418,77 @@ function VerifyContent() {
                 </span>
               </div>
 
-              {/* 
-                KEY FIX: explicit pixel height, NO overflow-hidden.
-                Html5Qrcode needs to measure and inject a video element —
-                overflow-hidden clips it and aspect-ratio gives no pixel height.
-              */}
-              <div
-                style={{ position: "relative", width: "100%", height: "300px" }}
-                className="rounded-2xl md:rounded-3xl border border-white/10 bg-black"
-              >
-                <div
-                  id={qrRegionId}
-                  style={{ width: "100%", height: "100%" }}
-                />
-                {!isScanning && (
-                  <div
-                    style={{
-                      position: "absolute", inset: 0,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      backgroundColor: "#0B1629",
-                      borderRadius: "inherit",
-                    }}
+              {mobile ? (
+                // ── MOBILE UI ──────────────────────────────────────────────
+                <div className="flex flex-col gap-3">
+                  {/* Primary: open native camera */}
+                  <button
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 active:scale-95 transition-all py-5 rounded-2xl font-bold flex flex-col items-center justify-center gap-2 text-base"
                   >
-                    <QrCode size={60} className="text-slate-700" />
-                  </div>
-                )}
-              </div>
+                    <Camera size={32} />
+                    <span>Tap to Scan QR Code</span>
+                    <span className="text-xs font-normal opacity-80">
+                      Opens your camera — point at the QR code
+                    </span>
+                  </button>
 
-              {scannerError ? (
-                <p className="text-center text-rose-400 text-xs md:text-sm mt-4 leading-relaxed">
-                  {scannerError}
-                </p>
-              ) : isScanning ? (
-                <p className="text-center text-slate-400 text-sm mt-5">
-                  Point your camera at the certificate QR code
-                </p>
+                  {/* Secondary: pick from gallery */}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full border border-white/20 bg-white/5 hover:bg-white/10 active:scale-95 transition-all py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Upload size={16} /> Upload QR Image from Gallery
+                  </button>
+
+                  <p className="text-center text-slate-500 text-xs mt-1">
+                    Take a photo of the certificate QR code or upload one from your gallery
+                  </p>
+                </div>
               ) : (
-                <p className="text-center text-slate-400 text-sm mt-5">
-                  Starting camera...
-                </p>
-              )}
+                // ── DESKTOP UI ─────────────────────────────────────────────
+                <>
+                  <div
+                    style={{ position: "relative", width: "100%", height: "300px" }}
+                    className="rounded-2xl md:rounded-3xl border border-white/10 bg-black"
+                  >
+                    <div id={qrRegionId} style={{ width: "100%", height: "100%" }} />
+                    {!isScanning && (
+                      <div
+                        style={{
+                          position: "absolute", inset: 0,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          backgroundColor: "#0B1629",
+                          borderRadius: "inherit",
+                        }}
+                      >
+                        <QrCode size={60} className="text-slate-700" />
+                      </div>
+                    )}
+                  </div>
 
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full mt-4 md:mt-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 transition py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 text-sm md:text-base"
-              >
-                <Upload size={16} className="md:w-[17px] md:h-[17px]" /> Upload QR Image
-              </button>
+                  {scannerError ? (
+                    <p className="text-center text-rose-400 text-xs md:text-sm mt-4 leading-relaxed">
+                      {scannerError}
+                    </p>
+                  ) : isScanning ? (
+                    <p className="text-center text-slate-400 text-sm mt-5">
+                      Point your camera at the certificate QR code
+                    </p>
+                  ) : (
+                    <p className="text-center text-slate-400 text-sm mt-5">
+                      Starting camera...
+                    </p>
+                  )}
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full mt-4 md:mt-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 transition py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 text-sm md:text-base"
+                  >
+                    <Upload size={16} className="md:w-[17px] md:h-[17px]" /> Upload QR Image
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -587,7 +619,9 @@ function VerifyContent() {
               <ShieldCheck size={50} className="text-slate-700 mb-4 md:mb-5 md:w-[65px] md:h-[65px]" />
               <h3 className="text-2xl md:text-3xl font-black text-white">Awaiting Verification</h3>
               <p className="text-slate-400 mt-3 max-w-md leading-relaxed text-sm md:text-base">
-                Scan a QR code or upload a QR image to begin verification.
+                {mobile
+                  ? "Tap the button above to scan a QR code with your camera."
+                  : "Scan a QR code or upload a QR image to begin verification."}
               </p>
             </div>
           )}
