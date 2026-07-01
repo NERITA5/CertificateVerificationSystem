@@ -2,48 +2,62 @@
 
 import { PinataSDK } from "pinata-web3";
 
-// Configure SDK with your credentials
+// Initialize the SDK
 const pinata = new PinataSDK({
-  pinataJwt: process.env.PINATA_JWT,
-  pinataGateway: process.env.NEXT_PUBLIC_GATEWAY_URL,
+  pinataJwt: process.env.PINATA_JWT!,
+  pinataGateway: process.env.NEXT_PUBLIC_GATEWAY_URL!,
 });
 
 /**
- * A helper to wrap a promise with a timeout
+ * Creates a signed URL for a CID. 
+ * Using 'as any' to bypass incomplete SDK type definitions.
  */
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => 
-      setTimeout(() => reject(new Error("TimeoutError")), ms)
-    )
-  ]);
+export async function getPinataSignedUrl(cid: string) {
+  try {
+    const signedUrl = await (pinata.gateways as any).createSignedURL({
+      cid: cid,
+      expires: 120, // 2 minutes
+    });
+
+    return { success: true, url: signedUrl };
+  } catch (error: any) {
+    console.error("Pinata signed URL error:", error);
+    return { success: false, error: error.message };
+  }
 }
 
+// Compatibility helper
+export async function getPinataUploadUrl(cid: string) {
+  return await getPinataSignedUrl(cid);
+}
+
+/**
+ * Uploads a file directly via Server Action.
+ */
 export async function uploadToIPFS(formData: FormData) {
   try {
     const file = formData.get("file") as File;
     if (!file) {
-      return { success: false, error: "No file was found in the submission payload." };
+      return {
+        success: false,
+        error: "No file was found in the submission payload.",
+      };
     }
 
-    // Cast the UploadBuilder as a Promise to satisfy the withTimeout type check
-   // The 'as unknown as' pattern is the standard TypeScript "escape hatch" 
-// for converting incompatible types.
-const upload = await withTimeout(pinata.upload.file(file) as unknown as Promise<any>, 30000);
-    
-    return { 
-      success: true, 
-      ipfsHash: upload.IpfsHash, 
+    // Standard upload pattern for Pinata SDK
+    const upload = await pinata.upload.file(file);
+
+    // Casting to 'any' ensures the build succeeds by allowing access 
+    // to the dynamic property name returned by the SDK response
+    return {
+      success: true,
+      ipfsHash: (upload as any).IpfsHash || (upload as any).cid,
     };
   } catch (error: any) {
     console.error("IPFS Upload Error Details:", error);
-    
-    return { 
-      success: false, 
-      error: error.message === "TimeoutError" 
-        ? "Upload timed out. Check your internet connection." 
-        : error.message || "Failed to reach IPFS gateway." 
+    return {
+      success: false,
+      error: error.message || "Failed to reach IPFS gateway.",
     };
   }
 }

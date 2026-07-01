@@ -18,7 +18,7 @@ import {
   updateTransactionHash,
 } from "@/app/actions/certificates";
 
-import { uploadToIPFS } from "@/app/actions/ipfs";
+import { getPinataSignedUrl } from "@/app/actions/ipfs";
 import { issueCert } from "@/lib/contract";
 import { createStudent } from "@/app/actions/create-student";
 
@@ -88,10 +88,10 @@ export default function IssuePage() {
 
   const generatePDFBlob = async () => {
     if (!certificateRef.current) return null;
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     try {
       const canvas = await html2canvas(certificateRef.current, {
-        scale: 3,
+        scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
@@ -107,6 +107,40 @@ export default function IssuePage() {
       console.error("PDF Generation Error:", err);
       return null;
     }
+  };
+
+  const uploadDirectToPinata = async (
+    blob: Blob,
+    filename: string
+  ): Promise<string> => {
+    const urlResult = await getPinataSignedUrl("");
+
+    if (!urlResult.success || !urlResult.url) {
+      throw new Error("Failed to get upload URL from Pinata.");
+    }
+
+    const file = new File([blob], filename, { type: "application/pdf" });
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const uploadResponse = await fetch(urlResult.url, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+      const errText = await uploadResponse.text();
+      throw new Error(`Pinata upload failed: ${errText}`);
+    }
+
+    const uploadData = await uploadResponse.json();
+    const ipfsHash = uploadData?.IpfsHash || uploadData?.cid;
+
+    if (!ipfsHash) {
+      throw new Error("No IPFS hash returned from Pinata.");
+    }
+
+    return ipfsHash;
   };
 
   const handleIssueProcess = async () => {
@@ -125,32 +159,26 @@ export default function IssuePage() {
     setStatus(null);
 
     try {
-      // PHASE 1 — INITIAL PDF GENERATION
+      // PHASE 1 — GENERATE INITIAL PDF (without QR)
       setStatus({ type: "success", msg: "Compiling certificate document..." });
       let pdfBlob = await generatePDFBlob();
       if (!pdfBlob) throw new Error("Failed to generate certificate PDF.");
 
-      // PHASE 2 — UPLOAD PDF TO IPFS
+      // PHASE 2 — UPLOAD DIRECTLY FROM BROWSER TO PINATA (no Vercel hop)
       setStatus({ type: "success", msg: "Uploading certificate to IPFS..." });
-      const ipfsFormData = new FormData();
-      ipfsFormData.append(
-        "file",
+      const ipfsHash = await uploadDirectToPinata(
         pdfBlob,
         `${formData.studentName}_Certificate.pdf`
       );
-      const ipfsResult = await uploadToIPFS(ipfsFormData);
-      if (!ipfsResult.success || !ipfsResult.ipfsHash) {
-        throw new Error(ipfsResult.error || "Failed to upload certificate to IPFS.");
-      }
 
-      // PHASE 3 — CREATE DATABASE RECORD
+      // PHASE 3 — SAVE TO DATABASE
       setStatus({ type: "success", msg: "Saving certificate metadata..." });
       const dbResult = await saveCertificateToDb({
         studentName: formData.studentName,
         matricule: formData.matricule,
         department: formData.department || formData.faculty,
         degree: formData.degree,
-        ipfsHash: ipfsResult.ipfsHash,
+        ipfsHash,
       });
       if (!dbResult.success || !dbResult.certificate) {
         throw new Error(dbResult.error || "Database save failed.");
@@ -162,7 +190,7 @@ export default function IssuePage() {
       console.log("DB Certificate ID:", certificateId);
       console.log("Certificate Hash:", certHash);
 
-      // PHASE 3b — AUTO-SAVE STUDENT (silent, skips duplicate check)
+      // PHASE 3b — AUTO-SAVE STUDENT (silent)
       try {
         const studentData = new FormData();
         studentData.append("name", formData.studentName);
@@ -173,13 +201,13 @@ export default function IssuePage() {
         studentData.append("skipDuplicateCheck", "true");
         await createStudent(studentData);
       } catch {
-        // Silent fail — student may already exist
+        // Silent fail
       }
 
       // PHASE 4 — BLOCKCHAIN MINTING
       setStatus({ type: "success", msg: "Opening MetaMask for blockchain confirmation..." });
       const receipt = await issueCert(
-        ipfsResult.ipfsHash,
+        ipfsHash,
         formData.studentName,
         formData.matricule,
         formData.degree,
@@ -188,7 +216,7 @@ export default function IssuePage() {
       console.log("Blockchain Receipt:", receipt);
       if (!receipt || !receipt.hash) throw new Error("Blockchain transaction failed.");
 
-      // PHASE 5 — GENERATE FINAL QR (high quality)
+      // PHASE 5 — GENERATE QR CODE
       setStatus({ type: "success", msg: "Generating blockchain verification QR code..." });
       const trueVerifyUrl = `${window.location.origin}/verify?hash=${certHash}`;
       const finalQrData = await QRCode.toDataURL(trueVerifyUrl, {
@@ -201,29 +229,37 @@ export default function IssuePage() {
         },
       });
       setQrCodeUrl(finalQrData);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // PHASE 6 — FINAL PDF WITH QR
-      setStatus({ type: "success", msg: "Generating final certificate..." });
+      // Small delay so React re-renders the QR into the certificate template
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      // PHASE 6 — GENERATE FINAL PDF WITH QR BAKED IN
+      setStatus({ type: "success", msg: "Generating final certificate with QR..." });
       pdfBlob = await generatePDFBlob();
       if (!pdfBlob) throw new Error("Failed to generate final PDF.");
 
-      // PHASE 7 — UPDATE DATABASE
+      // PHASE 6b — UPLOAD FINAL PDF (with QR) directly to Pinata
+      setStatus({ type: "success", msg: "Uploading final certificate to IPFS..." });
+      const finalIpfsHash = await uploadDirectToPinata(
+        pdfBlob,
+        `${formData.studentName}_Certificate_Final.pdf`
+      );
+
+      // PHASE 7 — UPDATE DATABASE with transaction hash + final IPFS hash
       setStatus({ type: "success", msg: "Syncing blockchain data with database..." });
-      console.log("Updating DB:", certificateId, receipt.hash, finalQrData);
       const updateResult = await updateTransactionHash(
         certificateId,
         receipt.hash,
-        finalQrData
+        finalQrData,
+        finalIpfsHash
       );
-      console.log("Update Result:", updateResult);
       if (!updateResult.success) {
         throw new Error(
           updateResult.error || "Blockchain succeeded but database update failed."
         );
       }
 
-      // PHASE 8 — SUCCESS & DOWNLOAD
+      // PHASE 8 — DOWNLOAD & REDIRECT
       setStatus({ type: "success", msg: "Certificate Issued Successfully!" });
       const downloadUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");

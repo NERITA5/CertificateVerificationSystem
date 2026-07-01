@@ -4,11 +4,8 @@ import { prisma } from "../../lib/prisma";
 import { cookies } from "next/headers";
 import { verifyUniversityAccess } from "@/app/actions/auth";
 import crypto from "crypto";
-import { revalidatePath } from "next/cache"; // Add this line
+import { revalidatePath } from "next/cache";
 
-/**
- * Helper to get verified university ID from session
- */
 async function getAuthContext() {
   const cookieStore = await cookies();
   const wallet = cookieStore.get('wallet_address')?.value;
@@ -20,9 +17,6 @@ async function getAuthContext() {
   return auth.id;
 }
 
-/**
- * Step 1: Create record linked to specific universityId
- */
 export async function saveCertificateToDb(formData: {
   studentName: string;
   matricule: string;
@@ -41,7 +35,7 @@ export async function saveCertificateToDb(formData: {
       data: {
         ...formData,
         certHash,
-        universityId, // Bind to the authenticated university
+        universityId,
         isRevoked: false, 
       },
     });
@@ -53,21 +47,28 @@ export async function saveCertificateToDb(formData: {
   }
 }
 
-/**
- * Step 2: Update record, ensuring the ID belongs to the university
- */
-export async function updateTransactionHash(id: string, txHash: string, qrCodeDataString: string) {
+// ✅ Added optional finalIpfsHash parameter
+// When the final PDF (with QR baked in) is uploaded, we update
+// ipfsHash so the verify page always downloads the correct version.
+export async function updateTransactionHash(
+  id: string,
+  txHash: string,
+  qrCodeDataString: string,
+  finalIpfsHash?: string // optional — updates ipfsHash if final PDF was re-uploaded
+) {
   try {
     const universityId = await getAuthContext();
     
     const updatedCertificate = await prisma.certificate.update({
       where: { 
         id,
-        universityId // Security check: Only update if it belongs to this university
+        universityId,
       },
       data: { 
         transactionHash: txHash,
-        qrCodeData: qrCodeDataString 
+        qrCodeData: qrCodeDataString,
+        // Only update ipfsHash if a new final version was uploaded
+        ...(finalIpfsHash && { ipfsHash: finalIpfsHash }),
       }
     });
     
@@ -78,15 +79,12 @@ export async function updateTransactionHash(id: string, txHash: string, qrCodeDa
   }
 }
 
-/**
- * Step 3: Fetch ONLY certificates belonging to the current university
- */
 export async function getAllCertificates() {
   try {
     const universityId = await getAuthContext();
     
     const certificates = await prisma.certificate.findMany({
-      where: { universityId }, // Scope results to the authenticated university
+      where: { universityId },
       orderBy: { createdAt: 'desc' },
     });
     
@@ -96,9 +94,7 @@ export async function getAllCertificates() {
     return [];
   }
 }
-/**
- * Step 4: Revoke a certificate, ensuring it belongs to the current university
- */
+
 export async function revokeCertificate(certId: string) {
   try {
     const universityId = await getAuthContext();
@@ -106,14 +102,13 @@ export async function revokeCertificate(certId: string) {
     await prisma.certificate.update({
       where: { 
         id: certId,
-        universityId // Security check: Only revoke if it belongs to this university
+        universityId,
       },
       data: { 
         isRevoked: true 
       }
     });
 
-    // Refresh the dashboard and revoked list so the UI updates immediately
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/revoked-certificates');
 
@@ -123,25 +118,19 @@ export async function revokeCertificate(certId: string) {
     return { success: false, error: "Unauthorized or failed to revoke." };
   }
 }
-/**
- * Step 5: Delete a pending certificate
- * Ensures only pending (un-minted) certificates belonging to this university are deleted.
- */
+
 export async function deletePendingCertificate(certId: string) {
   try {
     const universityId = await getAuthContext();
 
-    // Security check: Only find and delete if it belongs to this university
-    // AND it has no transactionHash (meaning it's still pending)
-    const deletedCertificate = await prisma.certificate.delete({
+    await prisma.certificate.delete({
       where: { 
         id: certId,
         universityId,
-        transactionHash: null // Ensure we only delete if not yet minted
+        transactionHash: null,
       }
     });
 
-    // Refresh the dashboard so the UI updates
     revalidatePath('/dashboard');
     
     return { success: true };
