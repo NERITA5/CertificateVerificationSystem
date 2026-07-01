@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, useRef } from "react";
+import React, { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { verifyCert } from "@/lib/contract";
 import { Html5Qrcode } from "html5-qrcode";
@@ -40,6 +40,8 @@ function VerifyContent() {
   const qrRegionId = "html5qr-reader";
   const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isScanningRef = useRef(false);   // tracks real-time scanning state
+  const hasNavigatedRef = useRef(false); // prevents double-navigation on fast scan
 
   // AUTO VERIFY
   useEffect(() => {
@@ -48,53 +50,117 @@ function VerifyContent() {
     }
   }, [certHash]);
 
+  const stopScanner = useCallback(async () => {
+    try {
+      if (html5QrcodeRef.current && isScanningRef.current) {
+        await html5QrcodeRef.current.stop();
+        isScanningRef.current = false;
+      }
+    } catch (_) {
+      // ignore stop errors
+    }
+  }, []);
+
   // START SCANNER
   useEffect(() => {
     if (certHash || result || loading) return;
 
+    hasNavigatedRef.current = false;
     let mounted = true;
 
     const startScanner = async () => {
+      // Small delay so the DOM element is painted before Html5Qrcode mounts
+      await new Promise((r) => setTimeout(r, 300));
+      if (!mounted) return;
+
       try {
-        if (!html5QrcodeRef.current) {
-          html5QrcodeRef.current = new Html5Qrcode(qrRegionId);
+        // Always create a fresh instance — reusing a stopped instance is unreliable
+        if (html5QrcodeRef.current) {
+          try { await html5QrcodeRef.current.stop(); } catch (_) {}
         }
+        html5QrcodeRef.current = new Html5Qrcode(qrRegionId, { verbose: false });
 
-        if (mounted) {
-          setIsScanning(true);
-          setScannerError(null);
+        setIsScanning(true);
+        setScannerError(null);
+        isScanningRef.current = true;
 
+        const config = {
+          fps: 10,
+          qrbox: { width: 220, height: 220 },
+          aspectRatio: 1.0,
+          disableFlip: false,
+        };
+
+        const onSuccess = async (decodedText: string) => {
+          if (hasNavigatedRef.current) return;
+          hasNavigatedRef.current = true;
+          await handleDecodedUrl(decodedText);
+        };
+
+        // Try rear camera via facingMode first (works on most Android)
+        try {
+          await html5QrcodeRef.current.start(
+            { facingMode: { exact: "environment" } },
+            config,
+            onSuccess,
+            () => {}
+          );
+        } catch (_) {
+          // facingMode exact failed — try ideal (works on iOS Safari)
           try {
             await html5QrcodeRef.current.start(
               { facingMode: "environment" },
-              { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
-              async (decodedText) => { await handleDecodedUrl(decodedText); },
+              config,
+              onSuccess,
               () => {}
             );
-          } catch (directErr) {
+          } catch (__) {
+            // Both facingMode approaches failed — enumerate and pick back camera
             const devices = await Html5Qrcode.getCameras();
             if (!devices || devices.length === 0) {
               setScannerError("No camera detected on this device.");
               setIsScanning(false);
+              isScanningRef.current = false;
               return;
             }
             const backCamera =
-              devices.find((d) => d.label.toLowerCase().includes("back")) ||
-              devices[devices.length - 1];
+              devices.find((d) =>
+                /back|rear|environment/i.test(d.label)
+              ) || devices[devices.length - 1];
+
             await html5QrcodeRef.current.start(
               backCamera.id,
-              { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
-              async (decodedText) => { await handleDecodedUrl(decodedText); },
+              config,
+              onSuccess,
               () => {}
             );
           }
         }
-      } catch (err) {
-        console.error(err);
-        setScannerError(
-          "Camera access denied or unavailable. Please allow camera permissions, or use 'Upload QR Image' instead."
-        );
+      } catch (err: any) {
+        console.error("Scanner start error:", err);
+        isScanningRef.current = false;
         setIsScanning(false);
+        if (!mounted) return;
+
+        // Give a helpful message depending on the error type
+        if (
+          err?.message?.toLowerCase().includes("permission") ||
+          err?.message?.toLowerCase().includes("denied") ||
+          err?.name === "NotAllowedError"
+        ) {
+          setScannerError(
+            "Camera permission denied. Please allow camera access in your browser settings, then refresh."
+          );
+        } else if (
+          err?.name === "NotFoundError" ||
+          err?.message?.toLowerCase().includes("not found")
+        ) {
+          setScannerError("No camera found on this device.");
+        } else {
+          setScannerError(
+            "Camera unavailable. Use 'Upload QR Image' below to verify instead."
+          );
+        }
       }
     };
 
@@ -102,54 +168,58 @@ function VerifyContent() {
 
     return () => {
       mounted = false;
-      if (html5QrcodeRef.current?.isScanning) {
-        html5QrcodeRef.current.stop().catch(() => {});
-      }
+      stopScanner();
     };
   }, [certHash, result, loading]);
 
   const handleDecodedUrl = async (text: string) => {
+    await stopScanner();
+    setIsScanning(false);
+
     try {
       let hash = text.trim();
       if (text.includes("?hash=")) {
         const url = new URL(text);
         hash = url.searchParams.get("hash") || text.trim();
       }
-      if (html5QrcodeRef.current?.isScanning) {
-        await html5QrcodeRef.current.stop();
-      }
-      setIsScanning(false);
-      router.push(`/verify?hash=${hash}`);
+      router.push(`/verify?hash=${encodeURIComponent(hash)}`);
     } catch (err) {
-      console.error(err);
+      console.error("URL parse error:", err);
+      // If it's not a URL at all, treat the whole text as the hash
+      router.push(`/verify?hash=${encodeURIComponent(text.trim())}`);
     }
   };
 
   const restartScanner = async () => {
+    await stopScanner();
     setResult(null);
     setError(null);
     setIsRevoked(false);
     setResolvedIpfsHash("");
     setScannerError(null);
-    if (html5QrcodeRef.current?.isScanning) {
-      await html5QrcodeRef.current.stop().catch(() => {});
-    }
+    hasNavigatedRef.current = false;
     router.push("/verify");
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     setLoading(true);
     setError(null);
+
     try {
-      const scanner = new Html5Qrcode("hidden-file-reader");
+      // Use a separate hidden div — never reuse the live scanner div
+      const scanner = new Html5Qrcode("hidden-file-reader", { verbose: false });
       const decodedText = await scanner.scanFile(file, true);
       await handleDecodedUrl(decodedText);
     } catch (err) {
       console.error(err);
       setLoading(false);
-      setError("Could not detect QR code from image.");
+      setError("Could not detect a QR code in the uploaded image.");
+    } finally {
+      // Reset input so same file can be re-uploaded
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -163,7 +233,7 @@ function VerifyContent() {
     let dbCertData = null;
 
     try {
-      // STEP 1 — Look up certificate in DB using certHash from QR/URL
+      // STEP 1 — DB lookup
       try {
         const lookupResponse = await fetch(
           `/api/certificates/lookup?hash=${hashToVerify}`
@@ -179,7 +249,7 @@ function VerifyContent() {
         console.warn("DB lookup failed:", dbErr);
       }
 
-      // STEP 2 — If DB says revoked, show revoked immediately (no blockchain call needed)
+      // STEP 2 — Quick revoke check from DB
       if (dbCertData?.isRevoked) {
         setIsRevoked(true);
         setResult({
@@ -194,10 +264,7 @@ function VerifyContent() {
         return;
       }
 
-      // STEP 3 — Blockchain verification.
-      // CRITICAL FIX: The contract stores certs by IPFS hash (what was passed
-      // to issueCertificate as _certHash). The QR encodes the DB certHash.
-      // So we must use dbCertData.ipfsHash for the blockchain lookup.
+      // STEP 3 — Blockchain verification using IPFS hash (what the contract stored)
       const blockchainKey = dbCertData?.ipfsHash || hashToVerify;
       let data: any = null;
 
@@ -205,8 +272,6 @@ function VerifyContent() {
         data = await verifyCert(blockchainKey);
       } catch (bcErr) {
         console.warn("Blockchain call failed:", bcErr);
-        // Fallback: if we have a confirmed DB record with a transaction hash,
-        // treat it as valid (blockchain may be temporarily unreachable)
         if (dbCertData && dbCertData.transactionHash) {
           data = {
             isValid: true,
@@ -225,7 +290,7 @@ function VerifyContent() {
         }
       }
 
-      // STEP 4 — Handle blockchain response
+      // STEP 4 — Handle result
       if (data?.isRevoked) {
         setIsRevoked(true);
         setResult({
@@ -247,7 +312,6 @@ function VerifyContent() {
           transactionHash: dbCertData?.transactionHash || data.transactionHash || null,
         });
       } else if (dbCertData && dbCertData.transactionHash) {
-        // Blockchain returned but isValid was false — fall back to DB if tx exists
         setResult({
           isValid: true,
           studentName: dbCertData.studentName,
@@ -276,12 +340,17 @@ function VerifyContent() {
 
   return (
     <div className="min-h-screen bg-[#07111F] text-white scroll-smooth">
-      <div id="hidden-file-reader" className="hidden"></div>
+      {/* Hidden div for file-based QR scanning — must never be display:none */}
+      <div
+        id="hidden-file-reader"
+        style={{ position: "absolute", top: "-9999px", left: "-9999px", width: "1px", height: "1px" }}
+      />
 
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         className="hidden"
         onChange={handleFileUpload}
       />
@@ -341,11 +410,29 @@ function VerifyContent() {
                 </span>
               </div>
 
-              <div className="relative w-full aspect-square rounded-2xl md:rounded-3xl overflow-hidden border border-white/10 bg-black">
-                <div id={qrRegionId} className="w-full h-full"></div>
+              {/* 
+                KEY FIX: explicit pixel height, NO overflow-hidden.
+                Html5Qrcode needs to measure and inject a video element —
+                overflow-hidden clips it and aspect-ratio gives no pixel height.
+              */}
+              <div
+                style={{ position: "relative", width: "100%", height: "300px" }}
+                className="rounded-2xl md:rounded-3xl border border-white/10 bg-black"
+              >
+                <div
+                  id={qrRegionId}
+                  style={{ width: "100%", height: "100%" }}
+                />
                 {!isScanning && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-[#0B1629]">
-                    <QrCode size={60} className="text-slate-700 md:w-[70px] md:h-[70px]" />
+                  <div
+                    style={{
+                      position: "absolute", inset: 0,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      backgroundColor: "#0B1629",
+                      borderRadius: "inherit",
+                    }}
+                  >
+                    <QrCode size={60} className="text-slate-700" />
                   </div>
                 )}
               </div>
@@ -354,9 +441,13 @@ function VerifyContent() {
                 <p className="text-center text-rose-400 text-xs md:text-sm mt-4 leading-relaxed">
                   {scannerError}
                 </p>
+              ) : isScanning ? (
+                <p className="text-center text-slate-400 text-sm mt-5">
+                  Point your camera at the certificate QR code
+                </p>
               ) : (
                 <p className="text-center text-slate-400 text-sm mt-5">
-                  Scan certificate QR code
+                  Starting camera...
                 </p>
               )}
 
@@ -379,16 +470,13 @@ function VerifyContent() {
               <p className="text-slate-400 mt-2 text-sm md:text-base">Connecting to blockchain network.</p>
             </div>
           ) : isRevoked && result ? (
-            // REVOKED STATE
             <div className="bg-white/5 border border-rose-500/20 rounded-[24px] md:rounded-[32px] overflow-hidden backdrop-blur-xl shadow-2xl shadow-rose-500/10">
               <div className="p-6 md:p-8 border-b border-white/10 bg-rose-500/10 flex flex-col sm:flex-row items-start gap-4">
                 <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-rose-500/20 border border-rose-400/30 flex items-center justify-center text-rose-400 flex-shrink-0">
                   <ShieldX size={28} className="md:w-[34px] md:h-[34px]" />
                 </div>
                 <div>
-                  <h3 className="text-2xl md:text-3xl font-black text-rose-400">
-                    Certificate Revoked
-                  </h3>
+                  <h3 className="text-2xl md:text-3xl font-black text-rose-400">Certificate Revoked</h3>
                   <p className="text-slate-300 mt-2 text-sm md:text-base">
                     This certificate has been revoked by the issuing institution and is no longer valid.
                   </p>
@@ -398,9 +486,7 @@ function VerifyContent() {
                 <DetailRow label="Student Name" value={result.studentName} />
                 <DetailRow label="Degree" value={result.degree} />
                 <DetailRow label="Institution" value={result.university || "University of Buea"} />
-                {result.department && (
-                  <DetailRow label="Department" value={result.department} />
-                )}
+                {result.department && <DetailRow label="Department" value={result.department} />}
                 <div className="pt-2">
                   <button
                     onClick={restartScanner}
@@ -412,22 +498,18 @@ function VerifyContent() {
               </div>
             </div>
           ) : result ? (
-            // VALID STATE
             <div className="bg-white/5 border border-white/10 rounded-[24px] md:rounded-[32px] overflow-hidden backdrop-blur-xl shadow-2xl shadow-cyan-500/10">
               <div className="p-6 md:p-8 border-b border-white/10 bg-emerald-500/10 flex flex-col sm:flex-row items-start gap-4">
                 <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
                   <CheckCircle2 size={28} className="md:w-[34px] md:h-[34px]" />
                 </div>
                 <div>
-                  <h3 className="text-2xl md:text-3xl font-black text-emerald-400">
-                    Certificate Verified
-                  </h3>
+                  <h3 className="text-2xl md:text-3xl font-black text-emerald-400">Certificate Verified</h3>
                   <p className="text-slate-300 mt-2 text-sm md:text-base">
                     This certificate is authentic and securely stored on the blockchain.
                   </p>
                 </div>
               </div>
-
               <div className="p-6 md:p-8 space-y-5 md:space-y-6">
                 <DetailRow
                   label="Certificate ID"
@@ -438,9 +520,7 @@ function VerifyContent() {
                 <DetailRow label="Student Name" value={result.studentName} />
                 <DetailRow label="Degree" value={result.degree} />
                 <DetailRow label="Institution" value={result.university || "University of Buea"} />
-                {result.department && (
-                  <DetailRow label="Department" value={result.department} />
-                )}
+                {result.department && <DetailRow label="Department" value={result.department} />}
 
                 {result.transactionHash ? (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3 items-start border-b border-white/5 pb-5 last:border-none">
@@ -461,17 +541,13 @@ function VerifyContent() {
                       >
                         <Copy size={14} />
                       </button>
-                      {copied === "tx" && (
-                        <span className="text-emerald-400 text-xs font-bold">Copied</span>
-                      )}
+                      {copied === "tx" && <span className="text-emerald-400 text-xs font-bold">Copied</span>}
                     </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3 items-start border-b border-white/5 pb-5 last:border-none">
                     <span className="text-slate-400 font-semibold text-sm">Blockchain Tx</span>
-                    <span className="md:col-span-2 text-amber-400 text-sm font-semibold">
-                      Pending confirmation
-                    </span>
+                    <span className="md:col-span-2 text-amber-400 text-sm font-semibold">Pending confirmation</span>
                   </div>
                 )}
 
@@ -497,9 +573,7 @@ function VerifyContent() {
             </div>
           ) : error ? (
             <div className="bg-red-500/10 border border-red-500/20 rounded-[24px] md:rounded-[32px] min-h-[320px] md:min-h-[400px] flex flex-col items-center justify-center text-center p-6 md:p-10">
-              <h3 className="text-2xl md:text-3xl font-black text-red-400 mb-3 md:mb-4">
-                Verification Failed
-              </h3>
+              <h3 className="text-2xl md:text-3xl font-black text-red-400 mb-3 md:mb-4">Verification Failed</h3>
               <p className="text-slate-300 max-w-md text-sm md:text-base">{error}</p>
               <button
                 onClick={restartScanner}
@@ -572,15 +646,9 @@ function VerifyContent() {
 }
 
 function DetailRow({
-  label,
-  value,
-  copy,
-  copied,
+  label, value, copy, copied,
 }: {
-  label: string;
-  value: string;
-  copy?: () => void;
-  copied?: boolean;
+  label: string; value: string; copy?: () => void; copied?: boolean;
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3 items-start border-b border-white/5 pb-5 last:border-none">
