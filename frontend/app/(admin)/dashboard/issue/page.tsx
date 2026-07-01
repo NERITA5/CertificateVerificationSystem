@@ -18,7 +18,7 @@ import {
   updateTransactionHash,
 } from "@/app/actions/certificates";
 
-import { getPinataSignedUrl } from "@/app/actions/ipfs";
+import { uploadToIPFS } from "@/app/actions/ipfs";
 import { issueCert } from "@/lib/contract";
 import { createStudent } from "@/app/actions/create-student";
 
@@ -109,40 +109,6 @@ export default function IssuePage() {
     }
   };
 
-  const uploadDirectToPinata = async (
-    blob: Blob,
-    filename: string
-  ): Promise<string> => {
-    const urlResult = await getPinataSignedUrl("");
-
-    if (!urlResult.success || !urlResult.url) {
-      throw new Error("Failed to get upload URL from Pinata.");
-    }
-
-    const file = new File([blob], filename, { type: "application/pdf" });
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const uploadResponse = await fetch(urlResult.url, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!uploadResponse.ok) {
-      const errText = await uploadResponse.text();
-      throw new Error(`Pinata upload failed: ${errText}`);
-    }
-
-    const uploadData = await uploadResponse.json();
-    const ipfsHash = uploadData?.IpfsHash || uploadData?.cid;
-
-    if (!ipfsHash) {
-      throw new Error("No IPFS hash returned from Pinata.");
-    }
-
-    return ipfsHash;
-  };
-
   const handleIssueProcess = async () => {
     if (
       !formData.studentName ||
@@ -164,12 +130,31 @@ export default function IssuePage() {
       let pdfBlob = await generatePDFBlob();
       if (!pdfBlob) throw new Error("Failed to generate certificate PDF.");
 
-      // PHASE 2 — UPLOAD DIRECTLY FROM BROWSER TO PINATA (no Vercel hop)
+      // PHASE 2 — UPLOAD TO IPFS + SILENT STUDENT SAVE (parallel)
       setStatus({ type: "success", msg: "Uploading certificate to IPFS..." });
-      const ipfsHash = await uploadDirectToPinata(
+      const ipfsFormData = new FormData();
+      ipfsFormData.append(
+        "file",
         pdfBlob,
         `${formData.studentName}_Certificate.pdf`
       );
+
+      const studentData = new FormData();
+      studentData.append("name", formData.studentName);
+      studentData.append("matricule", formData.matricule);
+      studentData.append("faculty", formData.faculty);
+      studentData.append("department", formData.department);
+      studentData.append("email", "");
+      studentData.append("skipDuplicateCheck", "true");
+
+      const [ipfsResult] = await Promise.all([
+        uploadToIPFS(ipfsFormData),
+        createStudent(studentData).catch(() => {}),
+      ]);
+
+      if (!ipfsResult.success || !ipfsResult.ipfsHash) {
+        throw new Error(ipfsResult.error || "Failed to upload certificate to IPFS.");
+      }
 
       // PHASE 3 — SAVE TO DATABASE
       setStatus({ type: "success", msg: "Saving certificate metadata..." });
@@ -178,7 +163,7 @@ export default function IssuePage() {
         matricule: formData.matricule,
         department: formData.department || formData.faculty,
         degree: formData.degree,
-        ipfsHash,
+        ipfsHash: ipfsResult.ipfsHash,
       });
       if (!dbResult.success || !dbResult.certificate) {
         throw new Error(dbResult.error || "Database save failed.");
@@ -190,24 +175,10 @@ export default function IssuePage() {
       console.log("DB Certificate ID:", certificateId);
       console.log("Certificate Hash:", certHash);
 
-      // PHASE 3b — AUTO-SAVE STUDENT (silent)
-      try {
-        const studentData = new FormData();
-        studentData.append("name", formData.studentName);
-        studentData.append("matricule", formData.matricule);
-        studentData.append("faculty", formData.faculty);
-        studentData.append("department", formData.department);
-        studentData.append("email", "");
-        studentData.append("skipDuplicateCheck", "true");
-        await createStudent(studentData);
-      } catch {
-        // Silent fail
-      }
-
       // PHASE 4 — BLOCKCHAIN MINTING
       setStatus({ type: "success", msg: "Opening MetaMask for blockchain confirmation..." });
       const receipt = await issueCert(
-        ipfsHash,
+        ipfsResult.ipfsHash,
         formData.studentName,
         formData.matricule,
         formData.degree,
@@ -223,35 +194,38 @@ export default function IssuePage() {
         width: 400,
         margin: 2,
         errorCorrectionLevel: "H",
-        color: {
-          dark: "#000000",
-          light: "#ffffff",
-        },
+        color: { dark: "#000000", light: "#ffffff" },
       });
       setQrCodeUrl(finalQrData);
 
-      // Small delay so React re-renders the QR into the certificate template
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      // Let React commit the QR into the DOM before snapshotting
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
 
       // PHASE 6 — GENERATE FINAL PDF WITH QR BAKED IN
       setStatus({ type: "success", msg: "Generating final certificate with QR..." });
       pdfBlob = await generatePDFBlob();
       if (!pdfBlob) throw new Error("Failed to generate final PDF.");
 
-      // PHASE 6b — UPLOAD FINAL PDF (with QR) directly to Pinata
+      // PHASE 6b — UPLOAD FINAL PDF
       setStatus({ type: "success", msg: "Uploading final certificate to IPFS..." });
-      const finalIpfsHash = await uploadDirectToPinata(
+      const finalIpfsFormData = new FormData();
+      finalIpfsFormData.append(
+        "file",
         pdfBlob,
         `${formData.studentName}_Certificate_Final.pdf`
       );
+      const finalIpfsResult = await uploadToIPFS(finalIpfsFormData);
+      if (!finalIpfsResult.success || !finalIpfsResult.ipfsHash) {
+        throw new Error(finalIpfsResult.error || "Failed to upload final certificate to IPFS.");
+      }
 
-      // PHASE 7 — UPDATE DATABASE with transaction hash + final IPFS hash
+      // PHASE 7 — UPDATE DATABASE
       setStatus({ type: "success", msg: "Syncing blockchain data with database..." });
       const updateResult = await updateTransactionHash(
         certificateId,
         receipt.hash,
         finalQrData,
-        finalIpfsHash
+        finalIpfsResult.ipfsHash
       );
       if (!updateResult.success) {
         throw new Error(
