@@ -526,7 +526,7 @@ function VerifyContent() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3 items-start border-b border-white/5 pb-5 last:border-none">
                     <span className="text-slate-400 font-semibold text-sm">Blockchain Tx</span>
                     <div className="md:col-span-2 flex items-center gap-2 flex-wrap">
-                      
+                      <a
                         href={`https://sepolia.etherscan.io/tx/${result.transactionHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -553,7 +553,7 @@ function VerifyContent() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 pt-4">
                   {resolvedIpfsHash && (
-                    
+                    <a
                       href={`https://gateway.pinata.cloud/ipfs/${resolvedIpfsHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
