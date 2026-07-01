@@ -18,7 +18,7 @@ import {
   updateTransactionHash,
 } from "@/app/actions/certificates";
 
-import { uploadToIPFS } from "@/app/actions/ipfs";
+import { getPinataUploadCredentials } from "@/app/actions/ipfs";
 import { issueCert } from "@/lib/contract";
 import { createStudent } from "@/app/actions/create-student";
 
@@ -109,6 +109,38 @@ export default function IssuePage() {
     }
   };
 
+  // Uploads directly from the browser to Pinata — never touches Vercel,
+  // so the 10s function timeout is completely bypassed.
+  const uploadToPinata = async (blob: Blob, filename: string): Promise<string> => {
+    // Step 1: Get a temp JWT from our server (tiny fast request, no file)
+    const creds = await getPinataUploadCredentials();
+    if (!creds.success || !creds.JWT) {
+      throw new Error(creds.error || "Could not get Pinata upload credentials.");
+    }
+
+    // Step 2: Upload file directly browser → Pinata
+    const file = new File([blob], filename, { type: "application/pdf" });
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("pinataMetadata", JSON.stringify({ name: filename }));
+    fd.append("pinataOptions", JSON.stringify({ cidVersion: 1 }));
+
+    const res = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${creds.JWT}` },
+      body: fd,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Pinata upload failed: ${errText}`);
+    }
+
+    const data = await res.json();
+    if (!data.IpfsHash) throw new Error("No IPFS hash returned from Pinata.");
+    return data.IpfsHash;
+  };
+
   const handleIssueProcess = async () => {
     if (
       !formData.studentName ||
@@ -130,14 +162,15 @@ export default function IssuePage() {
       let pdfBlob = await generatePDFBlob();
       if (!pdfBlob) throw new Error("Failed to generate certificate PDF.");
 
-      // PHASE 2 — UPLOAD TO IPFS + SILENT STUDENT SAVE (parallel)
+      // PHASE 2 — UPLOAD DIRECTLY BROWSER → PINATA (bypasses Vercel timeout)
       setStatus({ type: "success", msg: "Uploading certificate to IPFS..." });
-      const ipfsFormData = new FormData();
-      ipfsFormData.append(
-        "file",
+      const ipfsHash = await uploadToPinata(
         pdfBlob,
         `${formData.studentName}_Certificate.pdf`
       );
+
+      // PHASE 3 — SAVE TO DATABASE + SILENT STUDENT SAVE (parallel)
+      setStatus({ type: "success", msg: "Saving certificate metadata..." });
 
       const studentData = new FormData();
       studentData.append("name", formData.studentName);
@@ -147,24 +180,17 @@ export default function IssuePage() {
       studentData.append("email", "");
       studentData.append("skipDuplicateCheck", "true");
 
-      const [ipfsResult] = await Promise.all([
-        uploadToIPFS(ipfsFormData),
+      const [dbResult] = await Promise.all([
+        saveCertificateToDb({
+          studentName: formData.studentName,
+          matricule: formData.matricule,
+          department: formData.department || formData.faculty,
+          degree: formData.degree,
+          ipfsHash,
+        }),
         createStudent(studentData).catch(() => {}),
       ]);
 
-      if (!ipfsResult.success || !ipfsResult.ipfsHash) {
-        throw new Error(ipfsResult.error || "Failed to upload certificate to IPFS.");
-      }
-
-      // PHASE 3 — SAVE TO DATABASE
-      setStatus({ type: "success", msg: "Saving certificate metadata..." });
-      const dbResult = await saveCertificateToDb({
-        studentName: formData.studentName,
-        matricule: formData.matricule,
-        department: formData.department || formData.faculty,
-        degree: formData.degree,
-        ipfsHash: ipfsResult.ipfsHash,
-      });
       if (!dbResult.success || !dbResult.certificate) {
         throw new Error(dbResult.error || "Database save failed.");
       }
@@ -178,7 +204,7 @@ export default function IssuePage() {
       // PHASE 4 — BLOCKCHAIN MINTING
       setStatus({ type: "success", msg: "Opening MetaMask for blockchain confirmation..." });
       const receipt = await issueCert(
-        ipfsResult.ipfsHash,
+        ipfsHash,
         formData.studentName,
         formData.matricule,
         formData.degree,
@@ -206,18 +232,12 @@ export default function IssuePage() {
       pdfBlob = await generatePDFBlob();
       if (!pdfBlob) throw new Error("Failed to generate final PDF.");
 
-      // PHASE 6b — UPLOAD FINAL PDF
+      // PHASE 6b — UPLOAD FINAL PDF BROWSER → PINATA
       setStatus({ type: "success", msg: "Uploading final certificate to IPFS..." });
-      const finalIpfsFormData = new FormData();
-      finalIpfsFormData.append(
-        "file",
+      const finalIpfsHash = await uploadToPinata(
         pdfBlob,
         `${formData.studentName}_Certificate_Final.pdf`
       );
-      const finalIpfsResult = await uploadToIPFS(finalIpfsFormData);
-      if (!finalIpfsResult.success || !finalIpfsResult.ipfsHash) {
-        throw new Error(finalIpfsResult.error || "Failed to upload final certificate to IPFS.");
-      }
 
       // PHASE 7 — UPDATE DATABASE
       setStatus({ type: "success", msg: "Syncing blockchain data with database..." });
@@ -225,7 +245,7 @@ export default function IssuePage() {
         certificateId,
         receipt.hash,
         finalQrData,
-        finalIpfsResult.ipfsHash
+        finalIpfsHash
       );
       if (!updateResult.success) {
         throw new Error(

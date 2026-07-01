@@ -1,77 +1,46 @@
 "use server";
 
-/**
- * Uploads a file directly to Pinata using their REST API.
- * Bypasses pinata-web3 SDK which has serverless compatibility issues.
- */
-export async function uploadToIPFS(formData: FormData) {
+export async function getPinataUploadCredentials() {
+  if (!process.env.PINATA_JWT) {
+    return { success: false, error: "Pinata JWT not configured.", JWT: null };
+  }
   try {
-    const file = formData.get("file") as File;
-
-    if (!file) {
-      return { success: false, error: "No file provided in form data." };
-    }
-
-    if (!process.env.PINATA_JWT) {
-      console.error("PINATA_JWT environment variable is not set.");
-      return { success: false, error: "Server configuration error." };
-    }
-
-    const pinataFormData = new FormData();
-    pinataFormData.append("file", file);
-    pinataFormData.append(
-      "pinataMetadata",
-      JSON.stringify({ name: file.name })
-    );
-    pinataFormData.append(
-      "pinataOptions",
-      JSON.stringify({ cidVersion: 1 })
-    );
-
     const response = await fetch(
-      "https://api.pinata.cloud/pinning/pinFileToIPFS",
+      "https://api.pinata.cloud/users/generateApiKey",
       {
         method: "POST",
         headers: {
           Authorization: `Bearer ${process.env.PINATA_JWT}`,
+          "Content-Type": "application/json",
         },
-        body: pinataFormData,
+        body: JSON.stringify({
+          keyName: `temp_upload_${Date.now()}`,
+          maxUses: 2,
+          permissions: {
+            endpoints: {
+              pinning: { pinFileToIPFS: true },
+            },
+          },
+        }),
       }
     );
-
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("Pinata API error:", errText);
-      throw new Error(`Pinata rejected the upload: ${errText}`);
+      const err = await response.text();
+      throw new Error(err);
     }
-
     const data = await response.json();
-    const cid = data.IpfsHash;
-
-    if (!cid) {
-      throw new Error("Pinata returned no IPFS hash.");
-    }
-
-    return { success: true, ipfsHash: cid };
-
+    return { success: true, JWT: data.JWT };
   } catch (error: any) {
-    console.error("IPFS Upload Error:", error.message);
-    return {
-      success: false,
-      error: error.message || "Unexpected error during IPFS upload.",
-    };
+    console.error("Pinata key gen error:", error.message);
+    return { success: false, error: error.message, JWT: null };
   }
 }
 
-/**
- * Creates a signed gateway URL for an existing CID (used on verify page).
- */
 export async function getPinataSignedUrl(cid: string) {
   try {
-    if (!cid) return { success: false, error: "No CID provided." };
-
+    if (!cid) return { success: false, error: "No CID provided.", url: null };
     const response = await fetch(
-      `https://api.pinata.cloud/v3/files/private/download_link`,
+      "https://api.pinata.cloud/v3/files/private/download_link",
       {
         method: "POST",
         headers: {
@@ -81,17 +50,11 @@ export async function getPinataSignedUrl(cid: string) {
         body: JSON.stringify({ cid, expires: 120 }),
       }
     );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Failed to create signed URL: ${errText}`);
-    }
-
+    if (!response.ok) throw new Error(await response.text());
     const data = await response.json();
     return { success: true, url: data.url || data.data };
-
   } catch (error: any) {
     console.error("Pinata Signed URL Error:", error.message);
-    return { success: false, error: "Failed to generate signed URL." };
+    return { success: false, error: "Failed to generate signed URL.", url: null };
   }
 }
