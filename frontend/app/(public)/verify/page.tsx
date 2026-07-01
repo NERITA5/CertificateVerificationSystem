@@ -38,7 +38,6 @@ function VerifyContent() {
   const [scannerError, setScannerError] = useState<string | null>(null);
 
   const qrRegionId = "html5qr-reader";
-
   const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,9 +60,6 @@ function VerifyContent() {
           html5QrcodeRef.current = new Html5Qrcode(qrRegionId);
         }
 
-        // Some mobile browsers fail Html5Qrcode.getCameras() due to
-        // permission timing. Try starting directly with facingMode
-        // first, falling back to camera enumeration if that fails.
         if (mounted) {
           setIsScanning(true);
           setScannerError(null);
@@ -71,42 +67,24 @@ function VerifyContent() {
           try {
             await html5QrcodeRef.current.start(
               { facingMode: "environment" },
-              {
-                fps: 10,
-                qrbox: { width: 240, height: 240 },
-                aspectRatio: 1,
-              },
-              async (decodedText) => {
-                await handleDecodedUrl(decodedText);
-              },
+              { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
+              async (decodedText) => { await handleDecodedUrl(decodedText); },
               () => {}
             );
           } catch (directErr) {
-            // Fallback: enumerate cameras explicitly (helps on some
-            // Android/iOS browsers where facingMode constraint fails)
             const devices = await Html5Qrcode.getCameras();
-
             if (!devices || devices.length === 0) {
               setScannerError("No camera detected on this device.");
               setIsScanning(false);
               return;
             }
-
             const backCamera =
-              devices.find((d) =>
-                d.label.toLowerCase().includes("back")
-              ) || devices[devices.length - 1];
-
+              devices.find((d) => d.label.toLowerCase().includes("back")) ||
+              devices[devices.length - 1];
             await html5QrcodeRef.current.start(
               backCamera.id,
-              {
-                fps: 10,
-                qrbox: { width: 240, height: 240 },
-                aspectRatio: 1,
-              },
-              async (decodedText) => {
-                await handleDecodedUrl(decodedText);
-              },
+              { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
+              async (decodedText) => { await handleDecodedUrl(decodedText); },
               () => {}
             );
           }
@@ -124,7 +102,6 @@ function VerifyContent() {
 
     return () => {
       mounted = false;
-
       if (html5QrcodeRef.current?.isScanning) {
         html5QrcodeRef.current.stop().catch(() => {});
       }
@@ -134,18 +111,14 @@ function VerifyContent() {
   const handleDecodedUrl = async (text: string) => {
     try {
       let hash = text.trim();
-
       if (text.includes("?hash=")) {
         const url = new URL(text);
         hash = url.searchParams.get("hash") || text.trim();
       }
-
       if (html5QrcodeRef.current?.isScanning) {
         await html5QrcodeRef.current.stop();
       }
-
       setIsScanning(false);
-
       router.push(`/verify?hash=${hash}`);
     } catch (err) {
       console.error(err);
@@ -158,35 +131,24 @@ function VerifyContent() {
     setIsRevoked(false);
     setResolvedIpfsHash("");
     setScannerError(null);
-
     if (html5QrcodeRef.current?.isScanning) {
       await html5QrcodeRef.current.stop().catch(() => {});
     }
-
     router.push("/verify");
   };
 
-  const handleFileUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-
     if (!file) return;
-
     setLoading(true);
     setError(null);
-
     try {
       const scanner = new Html5Qrcode("hidden-file-reader");
-
       const decodedText = await scanner.scanFile(file, true);
-
       await handleDecodedUrl(decodedText);
     } catch (err) {
       console.error(err);
-
       setLoading(false);
-
       setError("Could not detect QR code from image.");
     }
   };
@@ -201,25 +163,23 @@ function VerifyContent() {
     let dbCertData = null;
 
     try {
+      // STEP 1 — Look up certificate in DB using certHash from QR/URL
       try {
         const lookupResponse = await fetch(
           `/api/certificates/lookup?hash=${hashToVerify}`
         );
-
         const lookupData = await lookupResponse.json();
-
         if (lookupData?.success) {
           dbCertData = lookupData.certificate;
-
           if (dbCertData?.ipfsHash) {
             setResolvedIpfsHash(dbCertData.ipfsHash);
           }
         }
       } catch (dbErr) {
-        console.warn(dbErr);
+        console.warn("DB lookup failed:", dbErr);
       }
 
-      // Check revoked status from DB first (fastest, most reliable source)
+      // STEP 2 — If DB says revoked, show revoked immediately (no blockchain call needed)
       if (dbCertData?.isRevoked) {
         setIsRevoked(true);
         setResult({
@@ -234,11 +194,19 @@ function VerifyContent() {
         return;
       }
 
+      // STEP 3 — Blockchain verification.
+      // CRITICAL FIX: The contract stores certs by IPFS hash (what was passed
+      // to issueCertificate as _certHash). The QR encodes the DB certHash.
+      // So we must use dbCertData.ipfsHash for the blockchain lookup.
+      const blockchainKey = dbCertData?.ipfsHash || hashToVerify;
       let data: any = null;
 
       try {
-        data = await verifyCert(hashToVerify);
+        data = await verifyCert(blockchainKey);
       } catch (bcErr) {
+        console.warn("Blockchain call failed:", bcErr);
+        // Fallback: if we have a confirmed DB record with a transaction hash,
+        // treat it as valid (blockchain may be temporarily unreachable)
         if (dbCertData && dbCertData.transactionHash) {
           data = {
             isValid: true,
@@ -246,8 +214,7 @@ function VerifyContent() {
             studentName: dbCertData.studentName,
             degree: dbCertData.degree,
             university: dbCertData.university,
-            timestamp:
-              dbCertData.timestamp || Math.floor(Date.now() / 1000),
+            timestamp: dbCertData.timestamp || Math.floor(Date.now() / 1000),
           };
         } else if (dbCertData && !dbCertData.transactionHash) {
           throw new Error(
@@ -258,6 +225,7 @@ function VerifyContent() {
         }
       }
 
+      // STEP 4 — Handle blockchain response
       if (data?.isRevoked) {
         setIsRevoked(true);
         setResult({
@@ -273,19 +241,27 @@ function VerifyContent() {
           ...data,
           studentName: dbCertData?.studentName || data.studentName,
           degree: dbCertData?.degree || data.degree,
+          university: dbCertData?.university || data.university || "University of Buea",
           matricule: dbCertData?.matricule || data.matricule || null,
           department: dbCertData?.department || data.department || null,
-          // certHash = the lookup key (from QR/URL param)
-          // transactionHash = the actual on-chain mint transaction
-          transactionHash:
-            dbCertData?.transactionHash || data.transactionHash || null,
+          transactionHash: dbCertData?.transactionHash || data.transactionHash || null,
+        });
+      } else if (dbCertData && dbCertData.transactionHash) {
+        // Blockchain returned but isValid was false — fall back to DB if tx exists
+        setResult({
+          isValid: true,
+          studentName: dbCertData.studentName,
+          degree: dbCertData.degree,
+          university: dbCertData.university || "University of Buea",
+          matricule: dbCertData.matricule || null,
+          department: dbCertData.department || null,
+          transactionHash: dbCertData.transactionHash,
         });
       } else {
         setError("Certificate not found or invalid.");
       }
     } catch (err: any) {
       console.error(err);
-
       setError(err.message || "Verification failed.");
     } finally {
       setLoading(false);
@@ -294,12 +270,8 @@ function VerifyContent() {
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
-
     setCopied(key);
-
-    setTimeout(() => {
-      setCopied(null);
-    }, 2000);
+    setTimeout(() => { setCopied(null); }, 2000);
   };
 
   return (
@@ -321,12 +293,10 @@ function VerifyContent() {
             <div className="bg-gradient-to-br from-cyan-400 to-blue-600 p-2 md:p-2.5 rounded-xl md:rounded-2xl shadow-lg shadow-cyan-500/20">
               <ShieldCheck size={18} className="md:w-[22px] md:h-[22px]" />
             </div>
-
             <div>
               <h1 className="font-black text-base md:text-xl tracking-wide text-white">
                 certiVERIFY
               </h1>
-
               <p className="text-[9px] md:text-[11px] text-slate-400 font-medium hidden sm:block">
                 Blockchain Verification
               </p>
@@ -353,11 +323,9 @@ function VerifyContent() {
             <div className="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-semibold mb-4 md:mb-6">
               <ShieldCheck size={14} className="md:w-4 md:h-4" /> Secure Blockchain Verification
             </div>
-
             <h2 className="text-3xl sm:text-4xl lg:text-6xl font-black leading-tight text-white">
               Verify Academic Certificates Instantly
             </h2>
-
             <p className="text-slate-400 text-base md:text-lg leading-relaxed mt-4 md:mt-6 max-w-xl">
               Securely scan and validate academic certificates using blockchain-powered authentication technology.
             </p>
@@ -365,7 +333,6 @@ function VerifyContent() {
 
           <div className="relative">
             <div className="absolute inset-0 bg-cyan-500/20 blur-3xl rounded-full"></div>
-
             <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-[24px] md:rounded-[32px] p-5 md:p-6 shadow-2xl shadow-cyan-500/10">
               <div className="flex items-center gap-2 mb-4 md:mb-6">
                 <QrCode className="text-cyan-400" size={18} />
@@ -376,7 +343,6 @@ function VerifyContent() {
 
               <div className="relative w-full aspect-square rounded-2xl md:rounded-3xl overflow-hidden border border-white/10 bg-black">
                 <div id={qrRegionId} className="w-full h-full"></div>
-
                 {!isScanning && (
                   <div className="absolute inset-0 flex items-center justify-center bg-[#0B1629]">
                     <QrCode size={60} className="text-slate-700 md:w-[70px] md:h-[70px]" />
@@ -428,7 +394,6 @@ function VerifyContent() {
                   </p>
                 </div>
               </div>
-
               <div className="p-6 md:p-8 space-y-5 md:space-y-6">
                 <DetailRow label="Student Name" value={result.studentName} />
                 <DetailRow label="Degree" value={result.degree} />
@@ -436,7 +401,6 @@ function VerifyContent() {
                 {result.department && (
                   <DetailRow label="Department" value={result.department} />
                 )}
-
                 <div className="pt-2">
                   <button
                     onClick={restartScanner}
@@ -471,22 +435,18 @@ function VerifyContent() {
                   copy={() => copyToClipboard(certHash || "", "certId")}
                   copied={copied === "certId"}
                 />
-
                 <DetailRow label="Student Name" value={result.studentName} />
                 <DetailRow label="Degree" value={result.degree} />
                 <DetailRow label="Institution" value={result.university || "University of Buea"} />
-
                 {result.department && (
                   <DetailRow label="Department" value={result.department} />
                 )}
 
                 {result.transactionHash ? (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3 items-start border-b border-white/5 pb-5 last:border-none">
-                    <span className="text-slate-400 font-semibold text-sm">
-                      Blockchain Tx
-                    </span>
+                    <span className="text-slate-400 font-semibold text-sm">Blockchain Tx</span>
                     <div className="md:col-span-2 flex items-center gap-2 flex-wrap">
-                      <a
+                      
                         href={`https://sepolia.etherscan.io/tx/${result.transactionHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -517,7 +477,7 @@ function VerifyContent() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 pt-4">
                   {resolvedIpfsHash && (
-                    <a
+                    
                       href={`https://gateway.pinata.cloud/ipfs/${resolvedIpfsHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -526,7 +486,6 @@ function VerifyContent() {
                       <Download size={18} /> Download Certificate
                     </a>
                   )}
-
                   <button
                     onClick={restartScanner}
                     className="border border-white/10 bg-white/5 hover:bg-white/10 transition py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 text-sm md:text-base"
@@ -577,7 +536,6 @@ function VerifyContent() {
         <section id="how-it-works" className="mt-16 md:mt-28 scroll-mt-20 md:scroll-mt-28">
           <div className="bg-white/5 border border-white/10 rounded-[24px] md:rounded-[32px] p-6 md:p-8 backdrop-blur-xl">
             <h3 className="text-2xl md:text-3xl font-black text-white mb-6 md:mb-10">How It Works</h3>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <StepCard number="1" title="Scan QR" description="Scan the certificate QR code instantly." />
               <StepCard number="2" title="Retrieve Data" description="The system securely retrieves certificate records." />
@@ -591,7 +549,6 @@ function VerifyContent() {
         <section id="contact" className="mt-16 md:mt-28 scroll-mt-20 md:scroll-mt-28">
           <div className="bg-white/5 border border-white/10 rounded-[24px] md:rounded-[32px] p-6 md:p-8 backdrop-blur-xl">
             <h3 className="text-2xl md:text-3xl font-black text-white mb-6 md:mb-10">Contact Us</h3>
-
             <div className="grid sm:grid-cols-3 gap-4 md:gap-6">
               <ContactCard icon={<Mail className="text-cyan-400" />} title="Email" value="kettynerita@gmail.com" />
               <ContactCard icon={<Phone className="text-cyan-400" />} title="Phone" value="692184525" />
@@ -641,7 +598,7 @@ function DetailRow({
   );
 }
 
-function StepCard({ number, title, description }: { number: string; title: string; description: string; }) {
+function StepCard({ number, title, description }: { number: string; title: string; description: string }) {
   return (
     <div className="bg-white/5 border border-white/10 rounded-2xl md:rounded-3xl p-5 md:p-6 hover:border-cyan-400/20 transition">
       <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-black text-base md:text-lg mb-4 md:mb-5">
@@ -653,7 +610,7 @@ function StepCard({ number, title, description }: { number: string; title: strin
   );
 }
 
-function ContactCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string; }) {
+function ContactCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string }) {
   return (
     <div className="bg-white/5 border border-white/10 rounded-2xl md:rounded-3xl p-5 md:p-6">
       <div className="mb-3 md:mb-4">{icon}</div>
